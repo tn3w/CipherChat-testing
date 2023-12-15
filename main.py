@@ -13,6 +13,7 @@ from utils import clear_console, get_system_architecture, Tor, download_file, ge
 import os
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH
 import subprocess
+import tarfile
 
 CONSOLE = Console()
 SYSTEM, MACHINE = get_system_architecture()
@@ -39,7 +40,8 @@ if not os.path.isfile(GNUPG_EXECUTABLE_PATH):
 TOR_EXECUTABLE_PATH = {"Windows": os.path.join(DATA_DIR_PATH, "tor/tor/tor.exe")}.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
 
 if not os.path.isfile(TOR_EXECUTABLE_PATH):
-    with CONSOLE.status("[bold green]Trying to get the download links for Tor..."):
+    CONSOLE.print("[bold yellow]~~~ Installing Tor ~~~")
+    with CONSOLE.status("[green]Trying to get the download links for Tor..."):
         download_link, signature_link = Tor.get_download_link()
     CONSOLE.print("[green]~ Trying to get the download links for Tor... Done")
     
@@ -53,9 +55,7 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
     bundle_file_path = download_file(download_link, TEMP_DIR_PATH, "Tor Expert Bundle")
     bundle_signature_file_path = download_file(signature_link, TEMP_DIR_PATH, "Tor Expert Bundle Signature")
 
-    keyring_file_path = os.path.join(TEMP_DIR_PATH, "tor.keyring")
-
-    with CONSOLE.status("[bold green]Loading Tor Keys from keys.gnupg.net..."):
+    with CONSOLE.status("[green]Loading Tor Keys from keys.gnupg.net..."):
         try:
             subprocess.run([GNUPG_EXECUTABLE_PATH, "--keyserver", "keys.gnupg.net", "--recv-keys", "0xEF6E286DDA85EA2A4BA7DE684E2C6E8793298290"], check=True)
         except subprocess.CalledProcessError as e:
@@ -64,7 +64,7 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
             exit(1)
     CONSOLE.print("[green]~ Loading Tor Keys from keys.gnupg.net... Done")
 
-    with CONSOLE.status("[bold green]Validating Signature..."):
+    with CONSOLE.status("[green]Validating Signature..."):
         try:
             result = subprocess.run([GNUPG_EXECUTABLE_PATH, "--verify", bundle_signature_file_path, bundle_file_path], capture_output=True, check=True, text=True)
             if not result.returncode == 0:
@@ -76,3 +76,13 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
             CONSOLE.print("[red][Critical Error] Signature verification failed.")
             exit(1)
     CONSOLE.print("[green]~ Validating Signature... Good Signature")
+
+    with CONSOLE.status("[green]Extracting the TOR archive..."):
+        ARCHIV_PATH = os.path.join(DATA_DIR_PATH, "tor")
+        os.makedirs(os.path.join(DATA_DIR_PATH, "tor"), exist_ok=True)
+
+        with tarfile.open(bundle_file_path, 'r:gz') as tar:
+            tar.extractall(path=ARCHIV_PATH)
+        
+        if SYSTEM in ["macOS", "Linux"]:
+            os.system(f"chmod +x {TOR_EXECUTABLE_PATH}")

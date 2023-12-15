@@ -64,16 +64,19 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
     :param operation_name: Sets the name of the operation in the console (Optional)
     """
 
+    parsed_url = urlparse(url)
+    file_name = os.path.basename(parsed_url.path)
+
+    save_path = os.path.join(dict_path, file_name)
+
+    if os.path.isfile(save_path):
+        return save_path
+    
     progress = Progress()
 
     with progress:
 
         downloaded_bytes = 0
-
-        parsed_url = urlparse(url)
-        file_name = os.path.basename(parsed_url.path)
-
-        save_path = os.path.join(dict_path, file_name)
 
         with open(save_path, 'wb') as file:
             try:
