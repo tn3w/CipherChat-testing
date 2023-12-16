@@ -9,7 +9,7 @@ if __name__ != "__main__":
     exit(1)
 
 from rich.console import Console
-from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux
+from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete
 import os
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH
 import subprocess
@@ -86,3 +86,7 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
         
         if SYSTEM in ["macOS", "Linux"]:
             os.system(f"chmod +x {TOR_EXECUTABLE_PATH}")
+    
+    with CONSOLE.status("[green]Cleaning up (This can take up to two minutes)..."):
+        SecureDelete.directory(TEMP_DIR_PATH)
+    CONSOLE.print("[green]~ Cleaning up... Done")

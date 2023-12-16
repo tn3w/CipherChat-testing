@@ -14,7 +14,11 @@ from typing import Tuple, Optional
 import platform
 import requests
 import random
+import threading
+import shutil
 import subprocess
+import concurrent.futures
+import multiprocessing
 from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS
 from bs4 import BeautifulSoup
 from rich.progress import Progress
@@ -120,6 +124,115 @@ def get_gnupg_path() -> str:
 
 SYSTEM, MACHINE = get_system_architecture()
 CONSOLE = Console()
+CPU_COUNT = multiprocessing.cpu_count()
+
+class SecureDelete:
+    "Class for secure deletion of files or folders"
+
+    @staticmethod
+    def list_files_and_directories(directory_path: str) -> Tuple[list, list]:
+        """
+        Function to get all files and directorys in a directory
+
+        :param directory_path: The path to the directory
+        """
+
+        all_files = list()
+        all_directories = list()
+
+        def list_files_recursive(root, depth):
+            for item in os.listdir(root):
+                item_path = os.path.join(root, item)
+                if os.path.isfile(item_path):
+                    all_files.append((item_path, depth))
+                elif os.path.isdir(item_path):
+                    all_directories.append((item_path, depth))
+                    list_files_recursive(item_path, depth + 1)
+
+        list_files_recursive(directory_path, 0)
+
+        all_files.sort(key=lambda x: x[1], reverse=True)
+        all_directories.sort(key=lambda x: x[1], reverse=True)
+
+        all_files = [path for path, _ in all_files]
+        all_directories = [path for path, _ in all_directories]
+
+        return all_files, all_directories
+
+    @staticmethod
+    def file(file_path: str, quite: bool = False) -> None:
+        """
+        Function to securely delete a file by replacing it first with random characters and then according to Gutmann patterns and DoD 5220.22-M patterns
+
+        :param file_path: The path to the file
+        :param quite: If True nothing is written to the console
+        """
+        if not os.path.isfile(file_path):
+            return
+
+        file_size = os.path.getsize(file_path)
+
+        gutmann_patterns = [bytes([i % 256] * (file_size * 10)) for i in range(35)]
+        dod_patterns = [bytes([0x00] * (file_size * 10)), bytes([0xFF] * (file_size * 10)), bytes([0x00] * (file_size * 10))]
+
+        for index in range(35):
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+                with open(file_path, 'wb') as file:
+                    file.write(os.urandom(file_size))
+
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+                with open(file_path, 'ab') as file:
+                    file.seek(0, os.SEEK_END)
+
+                    # Gutmann Pattern
+                    for pattern in gutmann_patterns:
+                        file.write(pattern)
+
+                    # DoD 5220.22-M Pattern
+                    for pattern in dod_patterns:
+                        file.write(pattern)
+            except Exception as e:
+                if not quite:
+                    CONSOLE.log(f"[red][Error] Error deleting the file '{file_path}': {e}")
+
+            try:
+                os.remove(file_path)
+            except:
+                pass
+    
+    @staticmethod
+    def directory(directory_path: str, quite: bool = False) -> None:
+        """
+        Securely deletes entire folders with files and subfolders
+
+        :param directory_path: The path to the directory
+        :param quite: If True nothing is written to the console
+        """
+
+        files, directories = SecureDelete.list_files_and_directories(directory_path)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CPU_COUNT) as executor:
+            file_futures = {executor.submit(SecureDelete.file, file, quite): file for file in files}
+
+            concurrent.futures.wait(file_futures)
+
+            for directory in directories:
+                try:
+                    shutil.rmtree(directory)
+                except Exception as e:
+                    if not quite:
+                        print(f"[Error] Error deleting directory '{directory}': {e}")
+
+            try:
+                shutil.rmtree(directory_path)
+            except Exception as e:
+                if not quite:
+                    print(f"[Error] Error deleting directory '{directory_path}': {e}")
 
 class Linux:
     "Collection of functions that have something to do with Linux"
