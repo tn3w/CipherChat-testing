@@ -12,19 +12,22 @@ if __name__ == "__main__":
 import os
 from typing import Tuple, Optional
 import platform
+import secrets
 import requests
 import random
-import threading
 import shutil
 import subprocess
 import concurrent.futures
 import multiprocessing
-from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS
+from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS, DATA_DIR_PATH
 from bs4 import BeautifulSoup
 from rich.progress import Progress
 from rich.console import Console
 import distro
 from urllib.parse import urlparse
+from stem.control import Controller
+from stem import Signal
+import time
 
 LOGO = '''
  dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
@@ -58,6 +61,26 @@ def get_system_architecture() -> Tuple[str, str]:
     machine = machine_mappings.get(machine, "x86_64")
 
     return system, machine
+
+def generate_random_string(length: int, with_punctuation: bool = True, with_letters: bool = True) -> str:
+    """
+    Generates a random string
+
+    :param length: The length of the string
+    :param with_punctuation: Whether to include special characters
+    :param with_letters: Whether letters should be included
+    """
+
+    characters = "0123456789"
+
+    if with_punctuation:
+        characters += r"!\"#$%&'()*+,-.:;<=>?@[\]^_`{|}~"
+
+    if with_letters:
+        characters += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    random_string = ''.join(secrets.choice(characters) for _ in range(length))
+    return random_string
 
 def download_file(url: str, dict_path: str, operation_name: Optional[str] = None) -> Optional[str]:
     """
@@ -286,6 +309,9 @@ class Linux:
 
         return None
 
+SYSTEM, MACHINE = get_system_architecture()
+TOR_EXECUTABLE_PATH = {"Windows": os.path.join(DATA_DIR_PATH, "tor/tor/tor.exe")}.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
+
 class Tor:
 
     @staticmethod
@@ -317,3 +343,56 @@ class Tor:
                             break
         
         return (download_url, signature_url)
+    
+    @staticmethod
+    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list) -> Tuple[str, subprocess.Popen]:
+        random_password = generate_random_string(16)
+
+        tor_process = subprocess.Popen([TOR_EXECUTABLE_PATH, "--hash-password", random_password], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        hashed_password, _ = tor_process.communicate()
+        hashed_password = hashed_password.strip().decode()
+
+        temp_config_path = os.path.join(DATA_DIR_PATH, "torrc")
+
+        with open(temp_config_path, 'w+') as temp_config:
+            temp_config.write(f"SocksPort {socks_port}\n")
+            temp_config.write(f"ControlPort {control_port}\n")
+            temp_config.write(f"HashedControlPassword {hashed_password}\n")
+
+            for bridge in bridges:
+                temp_config.write(f"Bridge {bridge}\n")
+        
+        tor_process = subprocess.Popen(
+            [TOR_EXECUTABLE_PATH, "-f", temp_config_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            close_fds=True
+        )
+
+        while True:
+            line = tor_process.stdout.readline().decode().strip()
+            if line:
+                print(line)
+                if "[notice] Bootstrapped 100% (done): Done" in line:
+                    break
+
+        with Controller.from_port(port=control_port) as controller:
+            controller.authenticate(password=random_password)
+
+            start_time = time.time()
+            while not controller.is_alive():
+                if time.time() - start_time > 30:
+                    raise TimeoutError("Timeout!")
+                time.sleep(1)
+        
+        os.remove(temp_config_path)
+        
+        return random_password, tor_process
+    
+    @staticmethod
+    def send_shutdown_signal(control_port: int, random_password: str):
+        with Controller.from_port(port=control_port) as controller:
+            controller.authenticate(password=random_password)
+
+            controller.signal(Signal.SHUTDOWN) 

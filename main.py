@@ -90,3 +90,12 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
     with CONSOLE.status("[green]Cleaning up (This can take up to two minutes)..."):
         SecureDelete.directory(TEMP_DIR_PATH)
     CONSOLE.print("[green]~ Cleaning up... Done")
+
+with CONSOLE.status("[green]Starting Tor Executable..."):
+    random_password, tor_process = Tor.launch_tor_with_config(9010, 9011, [])
+
+
+
+
+Tor.send_shutdown_signal(9011, random_password)
+tor_process.terminate()
