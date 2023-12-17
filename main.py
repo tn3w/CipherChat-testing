@@ -276,9 +276,9 @@ if not use_default_bridge:
         if bridge_type == "snowflake":
             index = 0
             for ip_version in IP_VERSIONS:
-                file_path = download_file(download_urls["github"][index], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ip_version + ".rar", session)
+                file_path = download_file(download_urls["github"][index], TEMP_DIR_PATH, bridge_type + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
                 if file_path is None:
-                    file_path = download_file(download_urls["backup"][index], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ip_version + ".rar", session)
+                    file_path = download_file(download_urls["backup"][index], TEMP_DIR_PATH, bridge_type + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
 
                 index = 1
             exit()
