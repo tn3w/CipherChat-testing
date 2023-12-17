@@ -324,6 +324,7 @@ class Linux:
 
 SYSTEM, MACHINE = get_system_architecture()
 TOR_EXECUTABLE_PATH = {"Windows": os.path.join(DATA_DIR_PATH, "tor/tor/tor.exe")}.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
+SNOWFLAKE_PORTABLE_EXECUTABLE_PATH = os.path.join(DATA_DIR_PATH, "snowflake", "client", {"Windows": "client.exe"}.get(SYSTEM, "client"))
 
 class Tor:
 
@@ -367,7 +368,7 @@ class Tor:
             pass
     
     @staticmethod
-    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list) -> Tuple[str, subprocess.Popen]:
+    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list, use_snowflake: bool = False) -> Tuple[str, subprocess.Popen]:
         random_password = generate_random_string(16)
 
         tor_process = subprocess.Popen([TOR_EXECUTABLE_PATH, "--hash-password", random_password], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -383,6 +384,9 @@ class Tor:
 
             if not len(bridges) == 0:
                 temp_config.write(f"UseBridges 1\n")
+
+            if use_snowflake:
+                temp_config.write(f"ClientTransportPlugin snowflake exec {SNOWFLAKE_PORTABLE_EXECUTABLE_PATH}\n")
 
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
