@@ -388,7 +388,7 @@ class Tor:
         while True:
             line = tor_process.stdout.readline().decode().strip()
             if line:
-                print(line)
+                # print(line)
                 if "[notice] Bootstrapped 100% (done): Done" in line or "[err]" in line:
                     break
 
@@ -443,7 +443,20 @@ class Tor:
         return session
     
     @staticmethod
-    def is_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 5) -> bool:
+    def select_random_bridges(all_bridges: list, quantity: int = 3) -> list:
+        selected_bridges = []
+        
+        for i in range(quantity):
+            random_bridge = secrets.choice(all_bridges)
+            while random_bridge in selected_bridges:
+                random_bridge = secrets.choice(all_bridges)
+            selected_bridges.append(random_bridge)
+        
+        return selected_bridges
+
+    
+    @staticmethod
+    def is_obfs4_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 3) -> bool:
         try:
             s = socket.create_connection((bridge_address, bridge_port), timeout=timeout)
             s.close()

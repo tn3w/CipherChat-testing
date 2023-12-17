@@ -14,6 +14,8 @@ import os
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, BRIDGE_DOWNLOAD_URLS, IP_VERSIONS
 import subprocess
 import tarfile
+import json
+import secrets
 
 CONSOLE = Console()
 SYSTEM, MACHINE = get_system_architecture()
@@ -87,7 +89,7 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
         if SYSTEM in ["macOS", "Linux"]:
             os.system(f"chmod +x {TOR_EXECUTABLE_PATH}")
     
-    with CONSOLE.status("[green]Cleaning up (This can take up to two minutes)..."):
+    with CONSOLE.status("[green]Cleaning up (this can take up to 2 minutes)..."):
         SecureDelete.directory(TEMP_DIR_PATH)
     CONSOLE.print("[green]~ Cleaning up... Done")
 
@@ -151,23 +153,74 @@ bridges = default_bridges
 clear_console()
 
 if not use_default_bridge:
-    CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
-    with CONSOLE.status("[green]Starting Tor Executable..."):
-        control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges)
-    
-    if not os.path.isdir(TEMP_DIR_PATH):
-        os.mkdir(TEMP_DIR_PATH)
-    
-    download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
+    bridges_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
 
-    session = Tor.get_requests_session(8030, control_password, 8031)
-    if bridge_type == "snowflake":
-        pass
-    else:
-        file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
-        if file_path is None:
-            file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+    CONSOLE.print("[bold yellow]~~~ Bridge Selection ~~~")
 
-    with CONSOLE.status("[green]Terminating Tor..."):
-        Tor.send_shutdown_signal(9010, control_password)
-        tor_process.terminate()
+    if not os.path.isfile(bridges_path):
+        clear_console()
+        CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
+        with CONSOLE.status("[green]Starting Tor Executable..."):
+            control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges)
+        
+        if not os.path.isdir(TEMP_DIR_PATH):
+            os.mkdir(TEMP_DIR_PATH)
+        
+        download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
+
+        session = Tor.get_requests_session(8030, control_password, 8031)
+        if bridge_type == "snowflake":
+            pass
+        else:
+            file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+            if file_path is None:
+                file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+            
+            if not os.path.isfile(file_path):
+                CONSOLE.log("[red][Error] Error when downloading bridges, use of default bridges")
+            else:
+                with open(file_path, "r") as readable_file:
+                    unprocessed_bridges = readable_file.read()
+
+                processed_bridges = list()
+                for bridge in unprocessed_bridges.split("\n"):
+                    if not bridge.strip() == "":
+                        processed_bridges.append(bridge.strip())
+
+                if {"obfs4": 5000}.get(bridge_type, 20) >= len(processed_bridges):
+                    CONSOLE.log("[red][Error] Error when validating the bridges, bridges were either not downloaded correctly or the bridge page was compromised, use of default bridges")
+                else:
+                    with open(bridges_path, "w") as writeable_file:
+                        json.dump(processed_bridges, writeable_file)
+        
+        with CONSOLE.status("[green]Terminating Tor..."):
+            Tor.send_shutdown_signal(9010, control_password)
+            tor_process.terminate()
+
+        with CONSOLE.status("[green]Cleaning up (this can take up to 1 minute)..."):
+            SecureDelete.directory(TEMP_DIR_PATH)
+        CONSOLE.print("[green]~ Cleaning up... Done")
+
+    if os.path.isfile(bridges_path):
+        with open(bridges_path, "r") as readable_file:
+            all_bridges = json.load(readable_file)
+        
+        if bridge_type == "obfs4":
+            active_bridges = []
+            checked_bridges = []
+            with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
+                while not len(active_bridges) >= 6:
+                    random_bridge = secrets.choice(all_bridges)
+                    while random_bridge in checked_bridges:
+                        random_bridge = secrets.choice(all_bridges)
+
+                    bridge_address = random_bridge.split("obfs4 ")[1].split(":")[0]
+                    bridge_port = random_bridge.split("obfs4 ")[1].split(":")[1].split(" ")[0]
+                    if Tor.is_obfs4_bridge_online(bridge_address, bridge_port):
+                        active_bridges.append(random_bridge)
+
+                    checked_bridges.append(random_bridge)
+            
+            bridges = active_bridges
+        else:
+            bridges = Tor.select_random_bridges(all_bridges, {"snowflake": 2}.get(bridge_type, 1))
