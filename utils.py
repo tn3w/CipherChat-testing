@@ -64,6 +64,13 @@ def get_system_architecture() -> Tuple[str, str]:
 
     return system, machine
 
+def get_system_bits():
+    arch = platform.architecture()
+    if arch[0] in ['32bit', '64bit']:
+        return arch[0]
+    else:
+        return '64bit'
+
 def generate_random_string(length: int, with_punctuation: bool = True, with_letters: bool = True) -> str:
     """
     Generates a random string
@@ -391,7 +398,7 @@ class Tor:
         while True:
             line = tor_process.stdout.readline().decode().strip()
             if line:
-                # print(line)
+                print(line)
                 if "[notice] Bootstrapped 100% (done): Done" in line or "[err]" in line:
                     break
 

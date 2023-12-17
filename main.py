@@ -9,13 +9,16 @@ if __name__ != "__main__":
     exit(1)
 
 from rich.console import Console
-from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete
+from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete,\
+                  get_system_bits
 import os
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, BRIDGE_DOWNLOAD_URLS, IP_VERSIONS
 import subprocess
 import tarfile
 import json
 import secrets
+import requests
+import py7zr
 
 CONSOLE = Console()
 SYSTEM, MACHINE = get_system_architecture()
@@ -147,6 +150,43 @@ try:
 except:
     pass
 
+SYSTEM_BITS = get_system_bits()
+WINDOWS_GIT_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "git")
+WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH = os.path.join(WINDOWS_GIT_PORTABLE_PATH, "cmd", "git.exe")
+
+SNOWFLAKE_DIR_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
+
+if bridge_type == "snowflake":
+    CONSOLE.print("[bold yellow]~~~ Snowflake installation ~~~")
+    
+    git_executable_path = None
+
+    # FIXME: Check if git is installed, auto detect git_executable_path
+    if SYSTEM == "Linux":
+        Linux.install_package("git")
+        git_executable_path = "git"
+    if SYSTEM == "Windows":
+        download_link = None
+        with CONSOLE.status("[green]Getting Git Download links..."):
+            response = requests.get("https://api.github.com/repos/git-for-windows/git/releases/latest")
+            for _, git_version in response.json()["assets"].items():
+                if "PortableGit" in git_version["name"] and SYSTEM_BITS.replace("bit", "-bit") in git_version["name"]:
+                    download_link = git_version["browser_download_url"]
+        
+        if download_link is None:
+            CONSOLE.log("[red][Error] Git Portable could not be installed, this will probably lead to further errors, go to https://git-scm.com/download/win to install it for you.Git Portable could not be installed, this will probably lead to further errors, go to https://git-scm.com/download/win to install it for you.")
+        else:
+            if not os.path.isfile(TEMP_DIR_PATH):
+                os.mkdir(TEMP_DIR_PATH)
+            file_path = download_file(download_link, TEMP_DIR_PATH, "Git Portable", "git-portable.7z")
+
+            with py7zr.SevenZipFile(file_path, mode='r') as archiv:
+                archiv.extractall(WINDOWS_GIT_PORTABLE_PATH)
+            git_executable_path = WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH
+    
+    subprocess.run([git_executable_path, "clone", "https://git.torproject.org/pluggable-transports/snowflake.git", SNOWFLAKE_DIR_PATH], check=True)
+
+
 default_bridges = DEFAULT_BRIDGES[bridge_type]
 bridges = default_bridges
 
@@ -170,7 +210,14 @@ if not use_default_bridge:
 
         session = Tor.get_requests_session(8030, control_password, 8031)
         if bridge_type == "snowflake":
-            pass
+            index = 0
+            for ip_version in IP_VERSIONS:
+                file_path = download_file(download_urls["github"][index], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ip_version + ".rar", session)
+                if file_path is None:
+                    file_path = download_file(download_urls["backup"][index], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ip_version + ".rar", session)
+
+                index = 1
+            exit()
         else:
             file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
             if file_path is None:

@@ -5,3 +5,4 @@ distro
 stem
 psutil
 pysocks
+py7zr
