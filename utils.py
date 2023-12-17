@@ -84,17 +84,20 @@ def generate_random_string(length: int, with_punctuation: bool = True, with_lett
     random_string = ''.join(secrets.choice(characters) for _ in range(length))
     return random_string
 
-def download_file(url: str, dict_path: str, operation_name: Optional[str] = None) -> Optional[str]:
+def download_file(url: str, dict_path: str, operation_name: Optional[str] = None, file_name: Optional[str] = None, session: requests.Session = requests.Session()) -> Optional[str]:
     """
     Function to download a file
 
     :param url: The url of the file
     :param dict_path: Specifies the directory where the file should be saved
     :param operation_name: Sets the name of the operation in the console (Optional)
+    :param file_name: Sets the file name (Optional)
+    :param session: a requests.Session (Optional)
     """
 
-    parsed_url = urlparse(url)
-    file_name = os.path.basename(parsed_url.path)
+    if file_name is None:
+        parsed_url = urlparse(url)
+        file_name = os.path.basename(parsed_url.path)
 
     save_path = os.path.join(dict_path, file_name)
 
@@ -109,7 +112,7 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
 
         with open(save_path, 'wb') as file:
             try:
-                response = requests.get(url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)})
+                response = session.get(url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)})
             except:
                 return None
 
