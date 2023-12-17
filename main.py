@@ -19,6 +19,7 @@ import json
 import secrets
 import requests
 import py7zr
+from bs4 import BeautifulSoup
 
 CONSOLE = Console()
 SYSTEM, MACHINE = get_system_architecture()
@@ -159,19 +160,19 @@ SNOWFLAKE_DIR_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
 if bridge_type == "snowflake":
     CONSOLE.print("[bold yellow]~~~ Snowflake installation ~~~")
     
-    git_executable_path = None
+    git_executable_path = "git"
 
     # FIXME: Check if git is installed, auto detect git_executable_path
     if SYSTEM == "Linux":
         Linux.install_package("git")
-        git_executable_path = "git"
-    if SYSTEM == "Windows":
+    elif SYSTEM == "Windows":
         download_link = None
         with CONSOLE.status("[green]Getting Git Download links..."):
             response = requests.get("https://api.github.com/repos/git-for-windows/git/releases/latest")
             for _, git_version in response.json()["assets"].items():
                 if "PortableGit" in git_version["name"] and SYSTEM_BITS.replace("bit", "-bit") in git_version["name"]:
                     download_link = git_version["browser_download_url"]
+        CONSOLE.print("[green]~ Getting Git Download links... Done")
         
         if download_link is None:
             CONSOLE.log("[red][Error] Git Portable could not be installed, this will probably lead to further errors, go to https://git-scm.com/download/win to install it for you.Git Portable could not be installed, this will probably lead to further errors, go to https://git-scm.com/download/win to install it for you.")
@@ -180,11 +181,44 @@ if bridge_type == "snowflake":
                 os.mkdir(TEMP_DIR_PATH)
             file_path = download_file(download_link, TEMP_DIR_PATH, "Git Portable", "git-portable.7z")
 
-            with py7zr.SevenZipFile(file_path, mode='r') as archiv:
-                archiv.extractall(WINDOWS_GIT_PORTABLE_PATH)
+            with CONSOLE.status("[green]Extracting Git..."):
+                with py7zr.SevenZipFile(file_path, mode='r') as archiv:
+                    archiv.extractall(WINDOWS_GIT_PORTABLE_PATH)
+            CONSOLE.print("[green]~ Extracting Git... Done")
+            
             git_executable_path = WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH
+
+    CONSOLE.print("[green]~ Installing Git... Done")
+
+    go_executable_path = "go"
+    if SYSTEM == "Linux":
+        Linux.install_package("go")
+    elif SYSTEM in ["Windows", "macOS"]:
+        download_link = None
+        with CONSOLE.status("[green]Getting GoLang Download links..."):
+            response = requests.get("https://go.dev/dl/")
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            anchors = soup.find_all('a')
+
+            for anchor in anchors:
+                href = anchor.get('href')
+                if href:
+                    if "go.dev/dl/" in href and SYSTEM.lower() in href and {"i686": "i386"}.get(MACHINE, "amd64") in href:
+                        if (SYSTEM == "Windows" and href.endswith(".zip")) or (SYSTEM == "macOS" and href.endswith(".tar.gz")):
+                            download_link = href
+        print(download_link)
     
-    subprocess.run([git_executable_path, "clone", "https://git.torproject.org/pluggable-transports/snowflake.git", SNOWFLAKE_DIR_PATH], check=True)
+    with CONSOLE.status("[green]Cloning Snowflake..."):
+        try:
+            subprocess.run([git_executable_path, "clone", "https://git.torproject.org/pluggable-transports/snowflake.git", SNOWFLAKE_DIR_PATH], check=True)
+        except:
+            pass
+    CONSOLE.print("[green]~ Cloning Snowflake... Done")
+
+
+    exit()
 
 
 default_bridges = DEFAULT_BRIDGES[bridge_type]
