@@ -98,7 +98,7 @@ if os.path.isfile(BRIDGE_CONFIG_PATH):
     try:
         with open(BRIDGE_CONFIG_PATH, "r") as readable_file:
             file_config = readable_file.read()
-        bridge_type, use_default_bridge = file_config.split("--")[:1]
+        bridge_type, use_default_bridge = file_config.split("--")[:2]
         use_default_bridge = {"true": True}.get(use_default_bridge, False)
         if not bridge_type in ["obfs4", "snowflake", "webtunnel", "meek_lite"]:
             bridge_type = None
@@ -136,7 +136,7 @@ if bridge_type is None:
         use_default_bridge = True
 
 if not isinstance(use_default_bridge, bool):
-    use_buildin_input = input("\nUse buildin bridges? [y - yes, n - no]: ")
+    use_buildin_input = input("Use buildin bridges? [y - yes, n - no]: ")
     use_default_bridge = use_buildin_input.startswith("y")
 
 try:
