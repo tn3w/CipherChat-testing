@@ -84,7 +84,8 @@ def generate_random_string(length: int, with_punctuation: bool = True, with_lett
     random_string = ''.join(secrets.choice(characters) for _ in range(length))
     return random_string
 
-def download_file(url: str, dict_path: str, operation_name: Optional[str] = None, file_name: Optional[str] = None, session: requests.Session = requests.Session()) -> Optional[str]:
+def download_file(url: str, dict_path: str, operation_name: Optional[str] = None, file_name: Optional[str] = None,\
+                  session: requests.Session = requests.Session()) -> Optional[str]:
     """
     Function to download a file
 
@@ -107,7 +108,6 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
     progress = Progress()
 
     with progress:
-
         downloaded_bytes = 0
 
         with open(save_path, 'wb') as file:
@@ -351,9 +351,12 @@ class Tor:
     
     @staticmethod
     def terminate_tor_processes():
-        for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-                if "tor" == process.name().strip():
-                    process.terminate()
+        try:
+            for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+                    if "tor" == process.name().strip():
+                        process.terminate()
+        except:
+            pass
     
     @staticmethod
     def launch_tor_with_config(control_port: int, socks_port: int, bridges: list) -> Tuple[str, subprocess.Popen]:
@@ -393,29 +396,53 @@ class Tor:
                 controller.authenticate(password=random_password)
             except:
                 Tor.terminate_tor_processes()
-
-            start_time = time.time()
-            while not controller.is_alive():
-                if time.time() - start_time > 30:
-                    raise TimeoutError("Timeout!")
-                time.sleep(1)
+            else:
+                start_time = time.time()
+                while not controller.is_alive():
+                    if time.time() - start_time > 30:
+                        raise TimeoutError("Timeout!")
+                    time.sleep(1)
         
         os.remove(temp_config_path)
         
         return random_password, tor_process
     
     @staticmethod
-    def send_shutdown_signal(control_port: int, random_password: str):
+    def send_shutdown_signal(control_port: int, control_password: str) -> None:
         try:
             with Controller.from_port(port=control_port) as controller:
-                controller.authenticate(password=random_password)
+                controller.authenticate(password=control_password)
 
                 controller.signal(Signal.SHUTDOWN)
         except:
             Tor.terminate_tor_processes()
     
     @staticmethod
-    def is_bridge_online(bridge_address, bridge_port, timeout=5):
+    def send_new_identity_signal(control_port: int, control_password: str) -> None:
+        try:
+            with Controller.from_port(port=control_port) as controller:
+                controller.authenticate(password=control_password)
+
+                controller.signal(Signal.NEWNYM)
+        except:
+            pass
+    
+    @staticmethod
+    def get_requests_session(control_port: int, control_password: str, socks_port: int) -> requests.Session:
+        if secrets.choice([True] + [False] * 8):
+            Tor.send_new_identity_signal(control_port, control_password)
+        
+        session = requests.Session()
+
+        session.proxies = {
+            'http': 'socks5h://127.0.0.1:' + str(socks_port),
+            'https': 'socks5h://127.0.0.1:' + str(socks_port)
+        }
+
+        return session
+    
+    @staticmethod
+    def is_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 5) -> bool:
         try:
             s = socket.create_connection((bridge_address, bridge_port), timeout=timeout)
             s.close()
