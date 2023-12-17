@@ -4,3 +4,4 @@ requests
 distro
 stem
 psutil
+pysocks

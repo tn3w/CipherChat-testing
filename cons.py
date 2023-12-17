@@ -66,15 +66,15 @@ SNOWFLAKE_BUILDIN_BRIDGES = [
     "snowflake 192.0.2.4:80 8838024498816A039FCBBAB14E6F40A0843051FA fingerprint=8838024498816A039FCBBAB14E6F40A0843051FA url=https://snowflake-broker.torproject.net.global.prod.fastly.net/ front=foursquare.com ice=stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.net:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478 utls-imitate=hellorandomizedalpn"
 ]
 
-MEEKLITE_BUILDIN_BRIDGES = [
-    "meek_lite 192.0.2.18:80 BE776A53492E1E044A26F17306E1BC46A55A1625 url=https://meek.azureedge.net/ front=ajax.aspnetcdn.com"
-]
-
 WEBTUNNEL_BUILDIN_BRIDGES = [
     "webtunnel [2001:db8:9443:367a:3276:1e74:91c3:7a5a]:443 54BF1146B161573185FBA0299B0DC3A8F7D08080 url=https://d3pyjtpvxs6z0u.cloudfront.net/Exei6xoh1aev8fiethee ver=0.0.1"
 ]
 
-DOWNLOAD_BRIDGE_URLS = {
+MEEKLITE_BUILDIN_BRIDGES = [
+    "meek_lite 192.0.2.18:80 BE776A53492E1E044A26F17306E1BC46A55A1625 url=https://meek.azureedge.net/ front=ajax.aspnetcdn.com"
+]
+
+BRIDGE_DOWNLOAD_URLS = {
     "obfs4": {
         "github": "https://raw.githubusercontent.com/scriptzteam/Tor-Bridges-Collector/main/bridges-obfs4",
         "backup": "https://tor-bridges-collector.0xc0d3.xyz/Tor-Bridges-Collector-main/bridges-obfs4"
@@ -90,3 +90,10 @@ DOWNLOAD_BRIDGE_URLS = {
 }
 
 IP_VERSIONS = ["ipv4", "ipv6"]
+
+DEFAULT_BRIDGES = {
+    "obfs4": OBFS4_BUILDIN_BRIDGES,
+    "snowflake": SNOWFLAKE_BUILDIN_BRIDGES,
+    "webtunnel": WEBTUNNEL_BUILDIN_BRIDGES,
+    "meek_lite": MEEKLITE_BUILDIN_BRIDGES
+}

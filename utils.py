@@ -113,6 +113,7 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
         with open(save_path, 'wb') as file:
             try:
                 response = session.get(url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)})
+                response.raise_for_status()
             except:
                 return None
 

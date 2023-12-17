@@ -11,7 +11,7 @@ if __name__ != "__main__":
 from rich.console import Console
 from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete
 import os
-from cons import DATA_DIR_PATH, TEMP_DIR_PATH
+from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, BRIDGE_DOWNLOAD_URLS, IP_VERSIONS
 import subprocess
 import tarfile
 
@@ -145,10 +145,29 @@ try:
 except:
     pass
 
+default_bridges = DEFAULT_BRIDGES[bridge_type]
+bridges = default_bridges
+
 clear_console()
 
-with CONSOLE.status("[green]Starting Tor Executable..."):
-    random_password, tor_process = Tor.launch_tor_with_config(9010, 9011, [])
+if not use_default_bridge:
+    CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
+    with CONSOLE.status("[green]Starting Tor Executable..."):
+        control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges)
+    
+    if not os.path.isdir(TEMP_DIR_PATH):
+        os.mkdir(TEMP_DIR_PATH)
+    
+    download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
 
-Tor.send_shutdown_signal(9010, random_password)
-tor_process.terminate()
+    session = Tor.get_requests_session(8030, control_password, 8031)
+    if bridge_type == "snowflake":
+        pass
+    else:
+        file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+        if file_path is None:
+            file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+
+    with CONSOLE.status("[green]Terminating Tor..."):
+        Tor.send_shutdown_signal(9010, control_password)
+        tor_process.terminate()
