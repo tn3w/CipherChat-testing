@@ -28,6 +28,8 @@ from urllib.parse import urlparse
 from stem.control import Controller
 from stem import Signal
 import time
+import psutil
+import socket
 
 LOGO = '''
  dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
@@ -345,6 +347,12 @@ class Tor:
         return (download_url, signature_url)
     
     @staticmethod
+    def terminate_tor_processes():
+        for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+                if "tor" == process.name().strip():
+                    process.terminate()
+    
+    @staticmethod
     def launch_tor_with_config(control_port: int, socks_port: int, bridges: list) -> Tuple[str, subprocess.Popen]:
         random_password = generate_random_string(16)
 
@@ -355,9 +363,9 @@ class Tor:
         temp_config_path = os.path.join(DATA_DIR_PATH, "torrc")
 
         with open(temp_config_path, 'w+') as temp_config:
-            temp_config.write(f"SocksPort {socks_port}\n")
             temp_config.write(f"ControlPort {control_port}\n")
             temp_config.write(f"HashedControlPassword {hashed_password}\n")
+            temp_config.write(f"SocksPort {socks_port}\n")
 
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
@@ -374,11 +382,14 @@ class Tor:
             line = tor_process.stdout.readline().decode().strip()
             if line:
                 print(line)
-                if "[notice] Bootstrapped 100% (done): Done" in line:
+                if "[notice] Bootstrapped 100% (done): Done" in line or "[err]" in line:
                     break
 
         with Controller.from_port(port=control_port) as controller:
-            controller.authenticate(password=random_password)
+            try:
+                controller.authenticate(password=random_password)
+            except:
+                Tor.terminate_tor_processes()
 
             start_time = time.time()
             while not controller.is_alive():
@@ -392,7 +403,19 @@ class Tor:
     
     @staticmethod
     def send_shutdown_signal(control_port: int, random_password: str):
-        with Controller.from_port(port=control_port) as controller:
-            controller.authenticate(password=random_password)
+        try:
+            with Controller.from_port(port=control_port) as controller:
+                controller.authenticate(password=random_password)
 
-            controller.signal(Signal.SHUTDOWN) 
+                controller.signal(Signal.SHUTDOWN)
+        except:
+            Tor.terminate_tor_processes()
+    
+    @staticmethod
+    def is_bridge_online(bridge_address, bridge_port, timeout=5):
+        try:
+            s = socket.create_connection((bridge_address, bridge_port), timeout=timeout)
+            s.close()
+            return True
+        except:
+            return False

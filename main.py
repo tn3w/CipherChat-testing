@@ -91,11 +91,64 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
         SecureDelete.directory(TEMP_DIR_PATH)
     CONSOLE.print("[green]~ Cleaning up... Done")
 
+BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")
+bridge_type, use_default_bridge = None, None
+
+if os.path.isfile(BRIDGE_CONFIG_PATH):
+    try:
+        with open(BRIDGE_CONFIG_PATH, "r") as readable_file:
+            file_config = readable_file.read()
+        bridge_type, use_default_bridge = file_config.split("--")[:1]
+        use_default_bridge = {"true": True}.get(use_default_bridge, False)
+        if not bridge_type in ["obfs4", "snowflake", "webtunnel", "meek_lite"]:
+            bridge_type = None
+        if bridge_type == "meek_lite":
+            use_default_bridge = False
+    except:
+        pass
+
+if bridge_type is None:
+    bridge_types = ["obfs4", "snowflake", "webtunnel", "meek_lite (only buildin)"]
+    selected_option = 0
+
+    while True:
+        clear_console()
+        CONSOLE.print("[bold yellow]~~~ Bridge selection ~~~")
+
+        for i, option in enumerate(bridge_types):
+            if i == selected_option:
+                print(f"[>] {option}")
+            else:
+                print(f"[ ] {option}")
+        
+        key = input("\nChoose bridge type (c to confirm): ")
+
+        if not key.lower() in ["c", "confirm"]:
+            if len(bridge_types) < selected_option + 2:
+                selected_option = 0
+            else:
+                selected_option += 1
+        else:
+            bridge_type = bridge_types[selected_option].replace(" (only buildin)", "")
+            break
+    
+    if bridge_type == "meek_lite":
+        use_default_bridge = True
+
+if not isinstance(use_default_bridge, bool):
+    use_buildin_input = input("\nUse buildin bridges? [y - yes, n - no]: ")
+    use_default_bridge = use_buildin_input.startswith("y")
+
+try:
+    with open(BRIDGE_CONFIG_PATH, "w") as writeable_file:
+        writeable_file.write('--'.join([bridge_type, {True: "true", False: "false"}.get(use_default_bridge)]))
+except:
+    pass
+
+clear_console()
+
 with CONSOLE.status("[green]Starting Tor Executable..."):
     random_password, tor_process = Tor.launch_tor_with_config(9010, 9011, [])
 
-
-
-
-Tor.send_shutdown_signal(9011, random_password)
+Tor.send_shutdown_signal(9010, random_password)
 tor_process.terminate()
