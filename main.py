@@ -155,12 +155,16 @@ SYSTEM_BITS = get_system_bits()
 WINDOWS_GIT_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "git")
 WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH = os.path.join(WINDOWS_GIT_PORTABLE_PATH, "cmd", "git.exe")
 GO_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "go")
-GO_PORTABLE_EXECUTABLE_PATH = {"Linux": "go"}.get(SYSTEM, os.path.join(GO_PORTABLE_PATH, "bin", {"Windows": "go.exe"}.get(SYSTEM, "go")))
+GO_PORTABLE_EXECUTABLE_PATH = os.path.join(GO_PORTABLE_PATH, "bin", {"Windows": "go.exe"}.get(SYSTEM, "go"))
 SNOWFLAKE_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
 SNOWFLAKE_PORTABLE_CLIENT_PATH = os.path.join(SNOWFLAKE_PORTABLE_PATH, "client")
 SNOWFLAKE_PORTABLE_EXECUTABLE_PATH = os.path.join(SNOWFLAKE_PORTABLE_CLIENT_PATH, {"Windows": "client.exe"}.get(SYSTEM, "client"))
 
 SNOWFLAKE_DIR_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
+
+if bridge_type == "obfs4":
+    if SYSTEM == "Linux":
+        Linux.install_package("obfs4proxy")
 
 if bridge_type == "snowflake" and not os.path.isfile(SNOWFLAKE_PORTABLE_EXECUTABLE_PATH):
     clear_console()
@@ -236,13 +240,14 @@ if bridge_type == "snowflake" and not os.path.isfile(SNOWFLAKE_PORTABLE_EXECUTAB
             else:
                 CONSOLE.print("[red][Critical Error] GoLang could not be installed because no download link could be found")
                 exit()
+        go_executable_path = GO_PORTABLE_EXECUTABLE_PATH
 
     with CONSOLE.status("[green]Downloading Snowflake packages..."):
-        subprocess.run([GO_PORTABLE_EXECUTABLE_PATH, "get"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
+        subprocess.run([go_executable_path, "get"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
     CONSOLE.print("[green]~ Downloading Snowflake packages... Done")
 
     with CONSOLE.status("[green]Building Snowflake..."):
-        subprocess.run([GO_PORTABLE_EXECUTABLE_PATH, "build"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
+        subprocess.run([go_executable_path, "build"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
     CONSOLE.print("[green]~ Building Snowflake... Done")
     
     with CONSOLE.status("[green]Cleaning up (this can take up to 2 minutes)..."):
@@ -250,9 +255,8 @@ if bridge_type == "snowflake" and not os.path.isfile(SNOWFLAKE_PORTABLE_EXECUTAB
             SecureDelete.directory(TEMP_DIR_PATH)
     CONSOLE.print("[green]~ Cleaning up... Done")
 
-
 default_bridges = DEFAULT_BRIDGES[bridge_type]
-bridges = default_bridges
+bridges = Tor.select_random_bridges(default_bridges, 4)
 
 clear_console()
 
@@ -265,7 +269,7 @@ if not use_default_bridge:
         clear_console()
         CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
         with CONSOLE.status("[green]Starting Tor Executable..."):
-            control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges, bridge_type == "snowflake")
+            control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges, bridge_type == "snowflake", bridge_type == "obfs4")
         
         if not os.path.isdir(TEMP_DIR_PATH):
             os.mkdir(TEMP_DIR_PATH)
@@ -276,16 +280,15 @@ if not use_default_bridge:
         if bridge_type == "snowflake":
             index = 0
             for ip_version in IP_VERSIONS:
-                file_path = download_file(download_urls["github"][index], TEMP_DIR_PATH, bridge_type + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
+                file_path = download_file(download_urls["github"][index], TEMP_DIR_PATH, bridge_type.title() + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
                 if file_path is None:
-                    file_path = download_file(download_urls["backup"][index], TEMP_DIR_PATH, bridge_type + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
+                    file_path = download_file(download_urls["backup"][index], TEMP_DIR_PATH, bridge_type.title() + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
 
                 index = 1
-            exit()
         else:
-            file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+            file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
             if file_path is None:
-                file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type + " Bridges", bridge_type + ".txt", session)
+                file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
             
             if not os.path.isfile(file_path):
                 CONSOLE.log("[red][Error] Error when downloading bridges, use of default bridges")

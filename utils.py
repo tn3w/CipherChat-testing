@@ -368,7 +368,7 @@ class Tor:
             pass
     
     @staticmethod
-    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list, use_snowflake: bool = False) -> Tuple[str, subprocess.Popen]:
+    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list, use_snowflake: bool = False, use_obfs4: bool = False) -> Tuple[str, subprocess.Popen]:
         random_password = generate_random_string(16)
 
         tor_process = subprocess.Popen([TOR_EXECUTABLE_PATH, "--hash-password", random_password], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -384,9 +384,12 @@ class Tor:
 
             if not len(bridges) == 0:
                 temp_config.write(f"UseBridges 1\n")
-
+            
             if use_snowflake:
                 temp_config.write(f"ClientTransportPlugin snowflake exec {SNOWFLAKE_PORTABLE_EXECUTABLE_PATH}\n")
+            
+            if use_obfs4 and SYSTEM == "Linux": # FIXME: Cleaning up
+                temp_config.write(f"ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n")
 
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
