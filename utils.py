@@ -211,7 +211,7 @@ class SecureDelete:
         gutmann_patterns = [bytes([i % 256] * (file_size * 10)) for i in range(35)]
         dod_patterns = [bytes([0x00] * (file_size * 10)), bytes([0xFF] * (file_size * 10)), bytes([0x00] * (file_size * 10))]
 
-        for index in range(35):
+        for _ in range(10):
             try:
                 if os.path.isfile(file_path):
                     os.remove(file_path)

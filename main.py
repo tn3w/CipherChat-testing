@@ -155,7 +155,7 @@ SYSTEM_BITS = get_system_bits()
 WINDOWS_GIT_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "git")
 WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH = os.path.join(WINDOWS_GIT_PORTABLE_PATH, "cmd", "git.exe")
 GO_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "go")
-GO_PORTABLE_EXECUTABLE_PATH = os.path.join(GO_PORTABLE_PATH, "bin", {"Windows": "go.exe"}.get(SYSTEM, "go"))
+GO_PORTABLE_EXECUTABLE_PATH = {"Linux": "go"}.get(SYSTEM, os.path.join(GO_PORTABLE_PATH, "bin", {"Windows": "go.exe"}.get(SYSTEM, "go")))
 SNOWFLAKE_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
 SNOWFLAKE_PORTABLE_CLIENT_PATH = os.path.join(SNOWFLAKE_PORTABLE_PATH, "client")
 SNOWFLAKE_PORTABLE_EXECUTABLE_PATH = os.path.join(SNOWFLAKE_PORTABLE_CLIENT_PATH, {"Windows": "client.exe"}.get(SYSTEM, "client"))
@@ -233,20 +233,21 @@ if bridge_type == "snowflake" and not os.path.isfile(SNOWFLAKE_PORTABLE_EXECUTAB
                         with zipfile.ZipFile(file_path, 'r') as zip_ref:
                             zip_ref.extractall(DATA_DIR_PATH)
                     CONSOLE.print("[green]~ Extracting GoLang... Done")
-
-                with CONSOLE.status("[green]Downloading Snowflake packages..."):
-                    subprocess.run([GO_PORTABLE_EXECUTABLE_PATH, "get"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
-                CONSOLE.print("[green]~ Downloading Snowflake packages... Done")
-
-                with CONSOLE.status("[green]Building Snowflake..."):
-                    subprocess.run([GO_PORTABLE_EXECUTABLE_PATH, "build"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
-                CONSOLE.print("[green]~ Building Snowflake... Done")
             else:
                 CONSOLE.print("[red][Critical Error] GoLang could not be installed because no download link could be found")
                 exit()
+
+    with CONSOLE.status("[green]Downloading Snowflake packages..."):
+        subprocess.run([GO_PORTABLE_EXECUTABLE_PATH, "get"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
+    CONSOLE.print("[green]~ Downloading Snowflake packages... Done")
+
+    with CONSOLE.status("[green]Building Snowflake..."):
+        subprocess.run([GO_PORTABLE_EXECUTABLE_PATH, "build"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
+    CONSOLE.print("[green]~ Building Snowflake... Done")
     
     with CONSOLE.status("[green]Cleaning up (this can take up to 2 minutes)..."):
-        SecureDelete.directory(TEMP_DIR_PATH)
+        if os.path.isdir(TEMP_DIR_PATH):
+            SecureDelete.directory(TEMP_DIR_PATH)
     CONSOLE.print("[green]~ Cleaning up... Done")
 
 
