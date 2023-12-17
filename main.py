@@ -205,7 +205,7 @@ if not use_default_bridge:
         with open(bridges_path, "r") as readable_file:
             all_bridges = json.load(readable_file)
         
-        if bridge_type == "obfs4":
+        if bridge_type in ["obfs4", "webtunnel"]:
             active_bridges = []
             checked_bridges = []
             with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
@@ -213,12 +213,17 @@ if not use_default_bridge:
                     random_bridge = secrets.choice(all_bridges)
                     while random_bridge in checked_bridges:
                         random_bridge = secrets.choice(all_bridges)
-
-                    bridge_address = random_bridge.split("obfs4 ")[1].split(":")[0]
-                    bridge_port = random_bridge.split("obfs4 ")[1].split(":")[1].split(" ")[0]
-                    if Tor.is_obfs4_bridge_online(bridge_address, bridge_port):
-                        active_bridges.append(random_bridge)
-
+                    
+                    if bridge_type == "obfs4":
+                        bridge_address = random_bridge.split("obfs4 ")[1].split(":")[0]
+                        bridge_port = random_bridge.split("obfs4 ")[1].split(":")[1].split(" ")[0]
+                        if Tor.is_obfs4_bridge_online(bridge_address, bridge_port):
+                            active_bridges.append(random_bridge)
+                    else:
+                        bridge_url = random_bridge.split("url=")[1].split(" ")[0]
+                        if Tor.is_webtunnel_bridge_online(bridge_url):
+                            active_bridges.append(random_bridge)
+                    
                     checked_bridges.append(random_bridge)
             
             bridges = active_bridges

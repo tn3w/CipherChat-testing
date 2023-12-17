@@ -374,6 +374,9 @@ class Tor:
             temp_config.write(f"HashedControlPassword {hashed_password}\n")
             temp_config.write(f"SocksPort {socks_port}\n")
 
+            if not len(bridges) == 0:
+                temp_config.write(f"UseBridges 1\n")
+
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
         
@@ -453,13 +456,20 @@ class Tor:
             selected_bridges.append(random_bridge)
         
         return selected_bridges
-
     
     @staticmethod
     def is_obfs4_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 3) -> bool:
         try:
             s = socket.create_connection((bridge_address, bridge_port), timeout=timeout)
             s.close()
+            return True
+        except:
+            return False
+    
+    @staticmethod
+    def is_webtunnel_bridge_online(webtunnel_url: str, timeout=3) -> bool:
+        try:
+            requests.get(webtunnel_url, timeout=timeout, headers={'User-Agent': random.choice(USER_AGENTS)})
             return True
         except:
             return False
