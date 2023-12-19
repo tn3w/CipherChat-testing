@@ -9,7 +9,7 @@ if __name__ != "__main__":
     exit(0)
 
 from rich.console import Console
-from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete
+from utils import clear_console, get_system_architecture, Tor, Bridge, download_file, get_gnupg_path, Linux, SecureDelete
 import os
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES
 import subprocess
@@ -152,16 +152,9 @@ try:
 except:
     pass
 
-if not bridge_type == "random":
-    default_bridges = DEFAULT_BRIDGES[bridge_type]
-    bridges = Tor.select_random_bridges(default_bridges, 4)
-else:
-    default_bridges = []
-    for _, specific_bridges in DEFAULT_BRIDGES.items():
-        default_bridges.extend(Tor.select_random_bridges(specific_bridges, 3))
-    bridges = Tor.select_random_bridges(default_bridges, 6)
-
 clear_console()
+
+bridges_in_use = None
 
 if not use_default_bridge:
     CONSOLE.print("[bold yellow]~~~ Bridge Selection ~~~")
@@ -181,6 +174,19 @@ if not use_default_bridge:
     if is_file_missing:
         clear_console()
         CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
+
+        with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
+            if not bridge_type == "random":
+                default_bridges = DEFAULT_BRIDGES[bridge_type]
+                bridges = Bridge.select_random(default_bridges, 4)
+            else:
+                default_bridges = []
+                for _, specific_bridges in DEFAULT_BRIDGES.items():
+                    default_bridges.extend(specific_bridges)
+                bridges = Bridge.select_random(default_bridges, 6)
+            
+            bridges_in_use = bridges
+
         with CONSOLE.status("[green]Starting Tor Executable..."):
             control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges)
         
@@ -190,12 +196,12 @@ if not use_default_bridge:
         session = Tor.get_requests_session(8030, control_password, 8031)
 
         if not bridge_type == "random":
-            Tor.download_bridge(bridge_type, session)
+            Bridge.download(bridge_type, session)
         else:
             for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
                 bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
                 if not os.path.isfile(bridge_path):
-                    Tor.download_bridge(specific_bridge_type, session)
+                    Bridge.download(specific_bridge_type, session)
         
         with CONSOLE.status("[green]Terminating Tor..."):
             Tor.send_shutdown_signal(9010, control_password)

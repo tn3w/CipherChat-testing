@@ -465,66 +465,111 @@ class Tor:
         }
 
         return session
-    
-    @staticmethod
-    def select_random_bridges(all_bridges: list, quantity: int = 3) -> list:
-        if len(all_bridges) == 1:
-            return all_bridges
-        
-        selected_bridges = []
-        
-        for i in range(quantity):
-            random_bridge = secrets.choice(all_bridges)
-            while random_bridge in selected_bridges:
-                random_bridge = secrets.choice(all_bridges)
-            selected_bridges.append(random_bridge)
 
-            if len(selected_bridges) >= len(all_bridges):
-                break
-        
-        return selected_bridges
-    
+class Bridge:
+
     @staticmethod
-    def is_obfs4_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 3) -> bool:
+    def _get_type(bridge: str) -> str:
+        for bridge_type in ["obfs4", "webtunnel", "snowflake", "meek_lite"]:
+            if bridge.startswith(bridge_type):
+                return bridge_type
+        return "vanilla"
+
+    @staticmethod
+    def _is_socket_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 3) -> bool:
         try:
-            s = socket.create_connection((bridge_address, bridge_port), timeout=timeout)
-            s.close()
-            return True
+            with socket.create_connection((bridge_address, bridge_port), timeout=timeout) as s:
+                return True
         except:
             return False
-    
+
     @staticmethod
-    def is_webtunnel_bridge_online(webtunnel_url: str, timeout: int = 3) -> bool:
+    def _is_webtunnel_bridge_online(webtunnel_url: str, timeout: int = 3) -> bool:
         try:
             requests.get(webtunnel_url, timeout=timeout, headers={'User-Agent': random.choice(USER_AGENTS)})
             return True
         except:
             return False
-    
+
     @staticmethod
-    def download_bridge(bridge_type, session: requests.Session):
+    def download(bridge_type, session: requests.Session):
         download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
         bridge_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
 
         file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
         if file_path is None:
             file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
-        
+
         if not os.path.isfile(file_path):
             CONSOLE.log("[red][Error] Error when downloading bridges, use of default bridges")
         else:
             with open(file_path, "r") as readable_file:
                 unprocessed_bridges = readable_file.read()
 
-            processed_bridges = list()
-            for bridge in unprocessed_bridges.split("\n"):
-                if not bridge.strip() == "":
-                    processed_bridges.append(bridge.strip())
+            processed_bridges = [bridge.strip() for bridge in unprocessed_bridges.split("\n") if bridge.strip()]
 
             if {"vanilla": 800, "obfs4": 5000}.get(bridge_type, 20) >= len(processed_bridges):
                 CONSOLE.log("[red][Error] Error when validating the bridges, bridges were either not downloaded correctly or the bridge page was compromised, use of default bridges")
             else:
                 with open(bridge_path, "w") as writeable_file:
                     json.dump(processed_bridges, writeable_file)
-        
-        return
+
+    @staticmethod
+    def select_random(all_bridges: list, quantity: int = 3) -> list:
+        if len(all_bridges) == 1:
+            return all_bridges
+
+        bridge_types = {}
+        for bridge in all_bridges:
+            bridge_type = Bridge._get_type(bridge)
+
+            if bridge_type not in bridge_types:
+                bridge_types[bridge_type] = []
+
+            bridge_types[bridge_type].append(bridge)
+
+        selected_bridges = []
+        checked_bridges = []
+
+        while len(selected_bridges) != quantity:
+            if len(bridge_types) > 1:
+                random_type = secrets.choice(list(bridge_types.keys()))
+            else:
+                random_type = next(iter(bridge_types))
+
+            while True:
+                if len(bridge_types[random_type]) > 1:
+                    random_bridge = secrets.choice(bridge_types[random_type])
+                    while random_bridge in checked_bridges:
+                        random_bridge = secrets.choice(bridge_types[random_type])
+                else:
+                    random_bridge = next(iter(bridge_types[random_type]))
+
+                found_bridge = False
+                
+                if random_type in ["vanilla", "obfs4"]:
+                    processed_bridge = random_bridge.replace("obfs4 ", "")
+                    bridge_address = processed_bridge.split(":")[0]
+                    bridge_port = processed_bridge.split(":")[1].split(" ")[0]
+
+                    if Bridge._is_socket_bridge_online(bridge_address, int(bridge_port)):
+                        selected_bridges.append(random_bridge)
+                        found_bridge = True
+                elif random_type == "webtunnel":
+                    bridge_url = random_bridge.split("url=")[1].split(" ")[0]
+                    if Bridge._is_webtunnel_bridge_online(bridge_url):
+                        selected_bridges.append(random_bridge)
+                        found_bridge = True
+                else:
+                    selected_bridges.append(random_bridge)
+                    found_bridge = True                
+
+                checked_bridges.append(random_bridge)
+
+                if found_bridge:
+                    break
+            
+            if len(checked_bridges) >= len(all_bridges):
+                break
+
+        return selected_bridges
