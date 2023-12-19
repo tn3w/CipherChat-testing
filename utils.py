@@ -455,6 +455,9 @@ class Tor:
     
     @staticmethod
     def select_random_bridges(all_bridges: list, quantity: int = 3) -> list:
+        if len(all_bridges) == 1:
+            return all_bridges
+        
         selected_bridges = []
         
         for i in range(quantity):
@@ -462,6 +465,9 @@ class Tor:
             while random_bridge in selected_bridges:
                 random_bridge = secrets.choice(all_bridges)
             selected_bridges.append(random_bridge)
+
+            if len(selected_bridges) >= len(all_bridges):
+                break
         
         return selected_bridges
     
