@@ -158,9 +158,8 @@ if not bridge_type == "random":
 else:
     default_bridges = []
     for _, specific_bridges in DEFAULT_BRIDGES.items():
-        default_bridges.extend(Tor.select_random_bridges(specific_bridges, 2))
-    bridges = Tor.select_random_bridges(default_bridges, 4)
-    print(bridges)
+        default_bridges.extend(Tor.select_random_bridges(specific_bridges, 3))
+    bridges = Tor.select_random_bridges(default_bridges, 6)
 
 clear_console()
 

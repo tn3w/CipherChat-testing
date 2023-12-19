@@ -113,7 +113,7 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
 
         with open(save_path, 'wb') as file:
             try:
-                response = session.get(url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)})
+                response = session.get(url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)}, timeout=5)
                 response.raise_for_status()
             except:
                 return None
@@ -399,11 +399,21 @@ class Tor:
             close_fds=True
         )
 
+        warn_time = None
+
         while True:
             line = tor_process.stdout.readline().decode().strip()
             if line:
                 print(line)
-                if "[notice] Bootstrapped 100% (done): Done" in line or "[err]" in line or "[warn]" in line:
+                if "[notice] Bootstrapped 100% (done): Done" in line:
+                    break
+
+                if warn_time is None:
+                    if "[err]" in line or "[warn]" in line:
+                        warn_time = int(time.time())
+                
+            if not warn_time is None:
+                if warn_time + 5 < int(time.time()):
                     break
 
         with Controller.from_port(port=control_port) as controller:

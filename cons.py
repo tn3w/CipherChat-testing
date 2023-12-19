@@ -80,7 +80,9 @@ SNOWFLAKE_BUILDIN_BRIDGES = [
 ]
 
 WEBTUNNEL_BUILDIN_BRIDGES = [
-    "webtunnel [2001:db8:9443:367a:3276:1e74:91c3:7a5a]:443 54BF1146B161573185FBA0299B0DC3A8F7D08080 url=https://d3pyjtpvxs6z0u.cloudfront.net/Exei6xoh1aev8fiethee ver=0.0.1"
+    "webtunnel [2001:db8:9443:367a:3276:1e74:91c3:7a5a]:443 54BF1146B161573185FBA0299B0DC3A8F7D08080 url=https://d3pyjtpvxs6z0u.cloudfront.net/Exei6xoh1aev8fiethee ver=0.0.1",
+    "webtunnel [2001:db8:3d87:58ab:4ec3:21ba:913f:99d8]:443 E4B91C347D685E929C1B7CE84CC27EB073127EA6 url=https://borntec.autos/poh8aiteaqu6oophaiXo ver=0.0.1",
+    "webtunnel [2001:db8:f501:5e2b:27a0:2475:bf96:10d8]:443 B31170341D35C6E1FB5416BEB219E349D8FE093D url=https://files.gus.computer/kd2DLzS5EJEcB5LRsHS22pLE ver=0.0.1"
 ]
 
 MEEKLITE_BUILDIN_BRIDGES = [
