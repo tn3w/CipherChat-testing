@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import concurrent.futures
 import multiprocessing
-from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS, DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH
+from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS, DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES
 from bs4 import BeautifulSoup
 from rich.progress import Progress
 from rich.console import Console
@@ -544,6 +544,9 @@ class Bridge:
                         random_bridge = secrets.choice(bridge_types[random_type])
                 else:
                     random_bridge = next(iter(bridge_types[random_type]))
+                    
+                    if random_bridge in checked_bridges:
+                        break
 
                 found_bridge = False
                 
@@ -573,3 +576,17 @@ class Bridge:
                 break
 
         return selected_bridges
+    
+    @staticmethod
+    def choose_buildin(bridge_type):
+        with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
+            if not bridge_type == "random":
+                default_bridges = DEFAULT_BRIDGES[bridge_type]
+                bridges = Bridge.select_random(default_bridges, 4)
+            else:
+                default_bridges = []
+                for _, specific_bridges in DEFAULT_BRIDGES.items():
+                    default_bridges.extend(specific_bridges)
+                bridges = Bridge.select_random(default_bridges, 6)
+        
+        return bridges
