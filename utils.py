@@ -64,13 +64,6 @@ def get_system_architecture() -> Tuple[str, str]:
 
     return system, machine
 
-def get_system_bits():
-    arch = platform.architecture()
-    if arch[0] in ['32bit', '64bit']:
-        return arch[0]
-    else:
-        return '64bit'
-
 def generate_random_string(length: int, with_punctuation: bool = True, with_letters: bool = True) -> str:
     """
     Generates a random string
@@ -207,9 +200,10 @@ class SecureDelete:
             return
 
         file_size = os.path.getsize(file_path)
+        file_size_times_two = file_size * 2
 
-        gutmann_patterns = [bytes([i % 256] * (file_size * 10)) for i in range(35)]
-        dod_patterns = [bytes([0x00] * (file_size * 10)), bytes([0xFF] * (file_size * 10)), bytes([0x00] * (file_size * 10))]
+        gutmann_patterns = [bytes([i % 256] * (file_size_times_two)) for i in range(35)]
+        dod_patterns = [bytes([0x00] * file_size_times_two), bytes([0xFF] * file_size_times_two), bytes([0x00] * file_size_times_two)]
 
         for _ in range(10):
             try:
@@ -217,7 +211,7 @@ class SecureDelete:
                     os.remove(file_path)
 
                 with open(file_path, 'wb') as file:
-                    file.write(os.urandom(file_size))
+                    file.write(os.urandom(file_size_times_two))
 
                 if os.path.isfile(file_path):
                     os.remove(file_path)
@@ -270,7 +264,7 @@ class SecureDelete:
                 if not quite:
                     print(f"[Error] Error deleting directory '{directory_path}': {e}")
 
-class Linux:
+class Linux: 
     "Collection of functions that have something to do with Linux"
 
     @staticmethod
@@ -324,7 +318,10 @@ class Linux:
 
 SYSTEM, MACHINE = get_system_architecture()
 TOR_EXECUTABLE_PATH = {"Windows": os.path.join(DATA_DIR_PATH, "tor/tor/tor.exe")}.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
-SNOWFLAKE_PORTABLE_EXECUTABLE_PATH = os.path.join(DATA_DIR_PATH, "snowflake", "client", {"Windows": "client.exe"}.get(SYSTEM, "client"))
+PLUGGABLE_TRANSPORTS_PATH = os.path.join(DATA_DIR_PATH, "tor", "tor", "pluggable_transports")
+SNOWFLAKE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "snowflake-client.exe"}.get(SYSTEM, "snowflake-client"))
+WEBTUNNEL_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "webtunnel-client.exe"}.get(SYSTEM, "webtunnel-client"))
+LYREBIRD_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "lyrebird.exe"}.get(SYSTEM, "lyrebird"))
 
 class Tor:
 
@@ -384,12 +381,9 @@ class Tor:
 
             if not len(bridges) == 0:
                 temp_config.write(f"UseBridges 1\n")
-            
-            if use_snowflake:
-                temp_config.write(f"ClientTransportPlugin snowflake exec {SNOWFLAKE_PORTABLE_EXECUTABLE_PATH}\n")
-            
-            if use_obfs4 and SYSTEM == "Linux": # FIXME: Cleaning up
-                temp_config.write(f"ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n")
+                temp_config.write(f"ClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\n")
+                temp_config.write(f"ClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\n")
+                temp_config.write(f"ClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\n")
 
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")

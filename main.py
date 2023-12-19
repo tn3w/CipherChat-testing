@@ -9,8 +9,7 @@ if __name__ != "__main__":
     exit(0)
 
 from rich.console import Console
-from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete,\
-                  get_system_bits
+from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete
 import os
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, BRIDGE_DOWNLOAD_URLS, IP_VERSIONS
 import subprocess
@@ -151,110 +150,6 @@ try:
 except:
     pass
 
-SYSTEM_BITS = get_system_bits()
-WINDOWS_GIT_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "git")
-WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH = os.path.join(WINDOWS_GIT_PORTABLE_PATH, "cmd", "git.exe")
-GO_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "go")
-GO_PORTABLE_EXECUTABLE_PATH = os.path.join(GO_PORTABLE_PATH, "bin", {"Windows": "go.exe"}.get(SYSTEM, "go"))
-SNOWFLAKE_PORTABLE_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
-SNOWFLAKE_PORTABLE_CLIENT_PATH = os.path.join(SNOWFLAKE_PORTABLE_PATH, "client")
-SNOWFLAKE_PORTABLE_EXECUTABLE_PATH = os.path.join(SNOWFLAKE_PORTABLE_CLIENT_PATH, {"Windows": "client.exe"}.get(SYSTEM, "client"))
-
-SNOWFLAKE_DIR_PATH = os.path.join(DATA_DIR_PATH, "snowflake")
-
-if bridge_type == "obfs4":
-    if SYSTEM == "Linux":
-        Linux.install_package("obfs4proxy")
-
-if bridge_type == "snowflake" and not os.path.isfile(SNOWFLAKE_PORTABLE_EXECUTABLE_PATH):
-    clear_console()
-    CONSOLE.print("[bold yellow]~~~ Snowflake installation ~~~")
-    
-    git_executable_path = "git"
-    
-    if SYSTEM == "Linux":
-        Linux.install_package("git")
-    elif SYSTEM == "Windows":
-        if not os.path.isdir(WINDOWS_GIT_PORTABLE_PATH):
-            download_link = None
-            with CONSOLE.status("[green]Getting Git Download links..."):
-                response = requests.get("https://api.github.com/repos/git-for-windows/git/releases/latest")
-                for git_version in response.json()["assets"]:
-                    if "PortableGit" in git_version["name"] and SYSTEM_BITS.replace("bit", "-bit") in git_version["name"]:
-                        download_link = git_version["browser_download_url"]
-            CONSOLE.print("[green]~ Getting Git Download links... Done")
-            
-            if download_link is None:
-                CONSOLE.log("[red][Error] Git Portable could not be installed, this will probably lead to further errors, go to https://git-scm.com/download/win to install it for you.Git Portable could not be installed, this will probably lead to further errors, go to https://git-scm.com/download/win to install it for you.")
-            else:
-                if not os.path.isdir(TEMP_DIR_PATH):
-                    os.mkdir(TEMP_DIR_PATH)
-                file_path = download_file(download_link, TEMP_DIR_PATH, "Git Portable", "git-portable.7z.exe")
-
-                with CONSOLE.status("[green]Extracting Git..."):
-                    process = subprocess.Popen([file_path, "-o", WINDOWS_GIT_PORTABLE_PATH, "-y"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    process.wait()
-                CONSOLE.print("[green]~ Extracting Git... Done")
-                
-                git_executable_path = WINDOWS_GIT_PORTABLE_EXECUTABLE_PATH
-
-    if not os.path.isdir(SNOWFLAKE_PORTABLE_PATH):
-        with CONSOLE.status("[green]Cloning Snowflake..."):
-            try:
-                subprocess.run([git_executable_path, "clone", "https://git.torproject.org/pluggable-transports/snowflake.git", SNOWFLAKE_DIR_PATH], check=True)
-            except:
-                pass
-        CONSOLE.print("[green]~ Cloning Snowflake... Done")
-
-    go_executable_path = "go"
-    if SYSTEM == "Linux":
-        Linux.install_package("go")
-    elif SYSTEM in ["Windows", "macOS"]:
-        if not os.path.isdir(GO_PORTABLE_PATH):
-            download_link = None
-            with CONSOLE.status("[green]Getting GoLang Download links..."):
-                response = requests.get("https://go.dev/dl/")
-                response.raise_for_status()
-
-                soup = BeautifulSoup(response.text, 'html.parser')
-                anchors = soup.find_all('a')
-
-                for anchor in anchors:
-                    href = anchor.get('href')
-                    if href:
-                        if "/dl/" in href and SYSTEM.lower() in href and {"i686": "i386"}.get(MACHINE, "amd64") in href:
-                            if (SYSTEM == "Windows" and href.endswith(".zip")) or (SYSTEM == "macOS" and href.endswith(".tar.gz")):
-                                download_link = href
-                                break
-            CONSOLE.print("[green]~ Getting GoLang Download links... Done")
-
-            if not download_link is None:
-                download_link = download_link.replace("/dl/", "https://go.dev/dl/")
-                file_path = download_file(download_link, TEMP_DIR_PATH, "GoLang")
-                
-                if SYSTEM == "Windows":
-                    with CONSOLE.status("[green]Extracting GoLang..."):
-                        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                            zip_ref.extractall(DATA_DIR_PATH)
-                    CONSOLE.print("[green]~ Extracting GoLang... Done")
-            else:
-                CONSOLE.print("[red][Critical Error] GoLang could not be installed because no download link could be found")
-                exit()
-        go_executable_path = GO_PORTABLE_EXECUTABLE_PATH
-
-    with CONSOLE.status("[green]Downloading Snowflake packages..."):
-        subprocess.run([go_executable_path, "get"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
-    CONSOLE.print("[green]~ Downloading Snowflake packages... Done")
-
-    with CONSOLE.status("[green]Building Snowflake..."):
-        subprocess.run([go_executable_path, "build"], cwd=SNOWFLAKE_PORTABLE_CLIENT_PATH, check=True, text=True)
-    CONSOLE.print("[green]~ Building Snowflake... Done")
-    
-    with CONSOLE.status("[green]Cleaning up (this can take up to 2 minutes)..."):
-        if os.path.isdir(TEMP_DIR_PATH):
-            SecureDelete.directory(TEMP_DIR_PATH)
-    CONSOLE.print("[green]~ Cleaning up... Done")
-
 default_bridges = DEFAULT_BRIDGES[bridge_type]
 bridges = Tor.select_random_bridges(default_bridges, 4)
 
@@ -269,7 +164,7 @@ if not use_default_bridge:
         clear_console()
         CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
         with CONSOLE.status("[green]Starting Tor Executable..."):
-            control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges, bridge_type == "snowflake", bridge_type == "obfs4")
+            control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges)
         
         if not os.path.isdir(TEMP_DIR_PATH):
             os.mkdir(TEMP_DIR_PATH)
