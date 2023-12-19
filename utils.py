@@ -540,6 +540,15 @@ class Bridge:
             while True:
                 if len(bridge_types[random_type]) > 1:
                     random_bridge = secrets.choice(bridge_types[random_type])
+
+                    number_already_checked = 0
+                    for bridge in bridge_types[bridge_type]:
+                        if bridge in checked_bridges:
+                            number_already_checked += 1
+
+                    if number_already_checked >= len(bridge_types[random_type]):
+                        break
+
                     while random_bridge in checked_bridges:
                         random_bridge = secrets.choice(bridge_types[random_type])
                 else:
@@ -571,7 +580,7 @@ class Bridge:
 
                 if found_bridge:
                     break
-            
+
             if len(checked_bridges) >= len(all_bridges):
                 break
 
