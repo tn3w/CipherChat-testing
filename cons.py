@@ -61,6 +61,21 @@ OBFS4_BUILDIN_BRIDGES = [
     "obfs4 85.31.186.26:443 91A6354697E6B02A386312F68D82CF86824D3606 cert=PBwr+S8JTVZo6MPdHnkTwXJPILWADLqfMGoVvhZClMq/Urndyd42BwX9YFJHZnBB3H0XCw iat-mode=0"
 ]
 
+VANILLA_BUILDIN_BRIDGES = [
+    "45.33.1.189:443 F9DFF618E7BA6C018245D417F39E970C2F019BAA",
+    "217.160.8.91:9706 FEA00E8A631508D55012222B4D31B68B31791D35",
+    "104.156.237.105:55292 F9F2B2D90FDF48394A00A1BE7E9D849C45B7845D",
+    "141.5.100.255:16749 9FA6E82152189521B3C78ACCF41F8B9F5069D26C",
+    "2600:3c00::f03c:91ff:fe7a:d97d:443 F9DFF618E7BA6C018245D417F39E970C2F019BAA"
+    "2001:19f0:6001:4102:5400:4ff:feae:ff4a:55292 F9F2B2D90FDF48394A00A1BE7E9D849C45B7845D"
+    "92.117.182.55:443 755BA0E7F4FE1A197EDF0D83681D2572AF39CB2E",
+    "158.69.207.216:9001 6565F31D9EC0C7DFFEA1920BE3BA4C73EF35B5C4",
+    "192.210.175.193:443 CE7870C73917FF91CA8DD068BBA8C771F85CAD19",
+    "116.202.247.57:9001 E094CE3392E59129B44B01DB5C63AA52F5FF4566",
+    "199.231.94.134:443 040FE18615AB10F10E6942B53C3CAAC5BF74736B",
+    "217.182.196.65:443 8FD3BAF5E14EBE1124D6253D59882AFE1C2B9B8E",
+]
+
 SNOWFLAKE_BUILDIN_BRIDGES = [
     "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net.global.prod.fastly.net/ front=foursquare.com ice=stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.com:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478 utls-imitate=hellorandomizedalpn",
     "snowflake 192.0.2.4:80 8838024498816A039FCBBAB14E6F40A0843051FA fingerprint=8838024498816A039FCBBAB14E6F40A0843051FA url=https://snowflake-broker.torproject.net.global.prod.fastly.net/ front=foursquare.com ice=stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.net:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478 utls-imitate=hellorandomizedalpn"
@@ -75,13 +90,13 @@ MEEKLITE_BUILDIN_BRIDGES = [
 ]
 
 BRIDGE_DOWNLOAD_URLS = {
+    "vanilla": {
+        "github": "https://raw.githubusercontent.com/scriptzteam/Tor-Bridges-Collector/main/bridges-vanilla",
+        "backup": "https://tor-bridges-collector.0xc0d3.xyz/Tor-Bridges-Collector-main/bridges-vanilla"
+    },
     "obfs4": {
         "github": "https://raw.githubusercontent.com/scriptzteam/Tor-Bridges-Collector/main/bridges-obfs4",
         "backup": "https://tor-bridges-collector.0xc0d3.xyz/Tor-Bridges-Collector-main/bridges-obfs4"
-    },
-    "snowflake": {
-        "github": ["https://github.com/scriptzteam/Tor-Bridges-Collector/raw/main/bridges-snowflake-ipv4.rar", "https://github.com/scriptzteam/Tor-Bridges-Collector/raw/main/bridges-snowflake-ipv6.rar"],
-        "backup": ["https://tor-bridges-collector.0xc0d3.xyz/Tor-Bridges-Collector-main/bridges-snowflake-ipv4.rar", "https://tor-bridges-collector.0xc0d3.xyz/Tor-Bridges-Collector-main/bridges-snowflake-ipv4.rar"]
     },
     "webtunnel": {
         "github": "https://raw.githubusercontent.com/scriptzteam/Tor-Bridges-Collector/main/bridges-webtunnel",
@@ -89,9 +104,8 @@ BRIDGE_DOWNLOAD_URLS = {
     }
 }
 
-IP_VERSIONS = ["ipv4", "ipv6"]
-
 DEFAULT_BRIDGES = {
+    "vanilla": VANILLA_BUILDIN_BRIDGES,
     "obfs4": OBFS4_BUILDIN_BRIDGES,
     "snowflake": SNOWFLAKE_BUILDIN_BRIDGES,
     "webtunnel": WEBTUNNEL_BUILDIN_BRIDGES,

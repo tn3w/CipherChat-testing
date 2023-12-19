@@ -104,16 +104,18 @@ if os.path.isfile(BRIDGE_CONFIG_PATH):
         with open(BRIDGE_CONFIG_PATH, "r") as readable_file:
             file_config = readable_file.read()
         bridge_type, use_default_bridge = file_config.split("--")[:2]
-        use_default_bridge = {"true": True}.get(use_default_bridge, False)
-        if not bridge_type in ["obfs4", "snowflake", "webtunnel", "meek_lite"]:
+        use_default_bridge = {"true": True, "false": False}.get(use_default_bridge, True)
+
+        if not bridge_type in ["obfs4", "webtunnel", "snowflake", "meek_lite", "vanilla", "random"]:
             bridge_type = None
-        if bridge_type == "meek_lite":
+
+        if bridge_type in ["snowflake", "meek_lite"]:
             use_default_bridge = False
     except:
         pass
 
 if bridge_type is None:
-    bridge_types = ["obfs4", "snowflake", "webtunnel", "meek_lite (only buildin)"]
+    bridge_types = ["vanilla", "obfs4", "webtunnel", "snowflake (only buildin)", "meek_lite (only buildin)", "Random selection"]
     selected_option = 0
 
     while True:
@@ -134,10 +136,10 @@ if bridge_type is None:
             else:
                 selected_option += 1
         else:
-            bridge_type = bridge_types[selected_option].replace(" (only buildin)", "")
+            bridge_type = bridge_types[selected_option].replace(" (only buildin)", "").replace("Random selection", "random")
             break
     
-    if bridge_type == "meek_lite":
+    if bridge_type in ["snowflake", "meek_lite"]:
         use_default_bridge = True
 
 if not isinstance(use_default_bridge, bool):
@@ -150,8 +152,14 @@ try:
 except:
     pass
 
-default_bridges = DEFAULT_BRIDGES[bridge_type]
-bridges = Tor.select_random_bridges(default_bridges, 4)
+if not bridge_type == "random":
+    default_bridges = DEFAULT_BRIDGES[bridge_type]
+    bridges = Tor.select_random_bridges(default_bridges, 4)
+else:
+    default_bridges = []
+    for _, specific_bridges in DEFAULT_BRIDGES.items():
+        default_bridges.extend(Tor.select_random_bridges(specific_bridges, 2))
+    bridges = Tor.select_random_bridges(default_bridges, 4)
 
 clear_console()
 
@@ -168,39 +176,14 @@ if not use_default_bridge:
         
         if not os.path.isdir(TEMP_DIR_PATH):
             os.mkdir(TEMP_DIR_PATH)
-        
-        download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
 
         session = Tor.get_requests_session(8030, control_password, 8031)
-        if bridge_type == "snowflake":
-            index = 0
-            for ip_version in IP_VERSIONS:
-                file_path = download_file(download_urls["github"][index], TEMP_DIR_PATH, bridge_type.title() + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
-                if file_path is None:
-                    file_path = download_file(download_urls["backup"][index], TEMP_DIR_PATH, bridge_type.title() + " " + ip_version + " Bridges", bridge_type + ip_version + ".rar", session)
 
-                index = 1
+        if not bridge_type == "random":
+            Tor.download_bridge(bridge_type, session)
         else:
-            file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
-            if file_path is None:
-                file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
-            
-            if not os.path.isfile(file_path):
-                CONSOLE.log("[red][Error] Error when downloading bridges, use of default bridges")
-            else:
-                with open(file_path, "r") as readable_file:
-                    unprocessed_bridges = readable_file.read()
-
-                processed_bridges = list()
-                for bridge in unprocessed_bridges.split("\n"):
-                    if not bridge.strip() == "":
-                        processed_bridges.append(bridge.strip())
-
-                if {"obfs4": 5000}.get(bridge_type, 20) >= len(processed_bridges):
-                    CONSOLE.log("[red][Error] Error when validating the bridges, bridges were either not downloaded correctly or the bridge page was compromised, use of default bridges")
-                else:
-                    with open(bridges_path, "w") as writeable_file:
-                        json.dump(processed_bridges, writeable_file)
+            for bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+                Tor.download_bridge(bridge_type, session)
         
         with CONSOLE.status("[green]Terminating Tor..."):
             Tor.send_shutdown_signal(9010, control_password)

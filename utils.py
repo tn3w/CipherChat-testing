@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import concurrent.futures
 import multiprocessing
-from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS, DATA_DIR_PATH
+from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS, DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH
 from bs4 import BeautifulSoup
 from rich.progress import Progress
 from rich.console import Console
@@ -30,6 +30,7 @@ from stem import Signal
 import time
 import psutil
 import socket
+import json
 
 LOGO = '''
  dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
@@ -481,9 +482,37 @@ class Tor:
             return False
     
     @staticmethod
-    def is_webtunnel_bridge_online(webtunnel_url: str, timeout=3) -> bool:
+    def is_webtunnel_bridge_online(webtunnel_url: str, timeout: int = 3) -> bool:
         try:
             requests.get(webtunnel_url, timeout=timeout, headers={'User-Agent': random.choice(USER_AGENTS)})
             return True
         except:
             return False
+    
+    @staticmethod
+    def download_bridge(bridge_type, session: requests.Session):
+        download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
+        bridges_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
+
+        file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
+        if file_path is None:
+            file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
+        
+        if not os.path.isfile(file_path):
+            CONSOLE.log("[red][Error] Error when downloading bridges, use of default bridges")
+        else:
+            with open(file_path, "r") as readable_file:
+                unprocessed_bridges = readable_file.read()
+
+            processed_bridges = list()
+            for bridge in unprocessed_bridges.split("\n"):
+                if not bridge.strip() == "":
+                    processed_bridges.append(bridge.strip())
+
+            if {"vanilla": 800, "obfs4": 5000}.get(bridge_type, 20) >= len(processed_bridges):
+                CONSOLE.log("[red][Error] Error when validating the bridges, bridges were either not downloaded correctly or the bridge page was compromised, use of default bridges")
+            else:
+                with open(bridges_path, "w") as writeable_file:
+                    json.dump(processed_bridges, writeable_file)
+        
+        return
