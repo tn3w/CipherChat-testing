@@ -324,6 +324,7 @@ SNOWFLAKE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": 
 WEBTUNNEL_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "webtunnel-client.exe"}.get(SYSTEM, "webtunnel-client"))
 LYREBIRD_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "lyrebird.exe"}.get(SYSTEM, "lyrebird"))
 CONJURE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "conjure-client.exe"}.get(SYSTEM, "lyrebird"))
+TOR_DATA_DIR2_PATH = os.path.join(DATA_DIR_PATH, "tor", "data2")
 
 class Tor:
 
@@ -367,7 +368,7 @@ class Tor:
             pass
     
     @staticmethod
-    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list, use_snowflake: bool = False, use_obfs4: bool = False) -> Tuple[str, subprocess.Popen]:
+    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list, is_service: bool = False) -> Tuple[str, subprocess.Popen]:
         random_password = generate_random_string(16)
 
         tor_process = subprocess.Popen([TOR_EXECUTABLE_PATH, "--hash-password", random_password], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -380,6 +381,11 @@ class Tor:
             temp_config.write(f"ControlPort {control_port}\n")
             temp_config.write(f"HashedControlPassword {hashed_password}\n")
             temp_config.write(f"SocksPort {socks_port}\n")
+
+            if is_service:
+                if not os.path.isdir(TOR_DATA_DIR2_PATH):
+                    os.mkdir(TOR_DATA_DIR2_PATH)
+                temp_config.write(f"DataDirectory {TOR_DATA_DIR2_PATH}\n")
 
             if not len(bridges) == 0:
                 temp_config.write(f"UseBridges 1\n")
@@ -413,7 +419,7 @@ class Tor:
                         warn_time = int(time.time())
                 
             if not warn_time is None:
-                if warn_time + 5 < int(time.time()):
+                if warn_time + 10 < int(time.time()):
                     break
 
         with Controller.from_port(port=control_port) as controller:

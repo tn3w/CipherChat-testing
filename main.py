@@ -15,10 +15,7 @@ from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES
 import subprocess
 import tarfile
 import json
-import secrets
-import requests
-import zipfile
-from bs4 import BeautifulSoup
+import time
 
 CONSOLE = Console()
 SYSTEM, MACHINE = get_system_architecture()
@@ -193,6 +190,7 @@ if not use_default_bridge:
         
         with CONSOLE.status("[green]Terminating Tor..."):
             Tor.send_shutdown_signal(9010, control_password)
+            time.sleep(1)
             tor_process.terminate()
 
         with CONSOLE.status("[green]Cleaning up (this can take up to 1 minute)..."):
