@@ -110,7 +110,7 @@ if os.path.isfile(BRIDGE_CONFIG_PATH):
             bridge_type = None
 
         if bridge_type in ["snowflake", "meek_lite"]:
-            use_default_bridge = False
+            use_default_bridge = True
     except:
         pass
 
