@@ -160,15 +160,26 @@ else:
     for _, specific_bridges in DEFAULT_BRIDGES.items():
         default_bridges.extend(Tor.select_random_bridges(specific_bridges, 2))
     bridges = Tor.select_random_bridges(default_bridges, 4)
+    print(bridges)
 
 clear_console()
 
 if not use_default_bridge:
-    bridges_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
-
     CONSOLE.print("[bold yellow]~~~ Bridge Selection ~~~")
 
-    if not os.path.isfile(bridges_path):
+    is_file_missing = False
+    if not bridge_type == "random":
+        bridge_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
+        is_file_missing = not os.path.isfile(bridge_path)
+    else:
+        for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+            bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
+            is_file_missing = not os.path.isfile(bridge_path)
+
+            if is_file_missing:
+                break
+
+    if is_file_missing:
         clear_console()
         CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
         with CONSOLE.status("[green]Starting Tor Executable..."):
@@ -182,8 +193,10 @@ if not use_default_bridge:
         if not bridge_type == "random":
             Tor.download_bridge(bridge_type, session)
         else:
-            for bridge_type in ["vanilla", "obfs4", "webtunnel"]:
-                Tor.download_bridge(bridge_type, session)
+            for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+                bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
+                if not os.path.isfile(bridge_path):
+                    Tor.download_bridge(specific_bridge_type, session)
         
         with CONSOLE.status("[green]Terminating Tor..."):
             Tor.send_shutdown_signal(9010, control_password)

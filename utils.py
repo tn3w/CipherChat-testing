@@ -323,6 +323,7 @@ PLUGGABLE_TRANSPORTS_PATH = os.path.join(DATA_DIR_PATH, "tor", "tor", "pluggable
 SNOWFLAKE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "snowflake-client.exe"}.get(SYSTEM, "snowflake-client"))
 WEBTUNNEL_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "webtunnel-client.exe"}.get(SYSTEM, "webtunnel-client"))
 LYREBIRD_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "lyrebird.exe"}.get(SYSTEM, "lyrebird"))
+CONJURE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "conjure-client.exe"}.get(SYSTEM, "lyrebird"))
 
 class Tor:
 
@@ -385,6 +386,7 @@ class Tor:
                 temp_config.write(f"ClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\n")
                 temp_config.write(f"ClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\n")
                 temp_config.write(f"ClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\n")
+                temp_config.write(f"ClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}\n")
 
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
@@ -401,7 +403,7 @@ class Tor:
             line = tor_process.stdout.readline().decode().strip()
             if line:
                 print(line)
-                if "[notice] Bootstrapped 100% (done): Done" in line or "[err]" in line:
+                if "[notice] Bootstrapped 100% (done): Done" in line or "[err]" in line or "[warn]" in line:
                     break
 
         with Controller.from_port(port=control_port) as controller:
@@ -492,7 +494,7 @@ class Tor:
     @staticmethod
     def download_bridge(bridge_type, session: requests.Session):
         download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
-        bridges_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
+        bridge_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
 
         file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
         if file_path is None:
@@ -512,7 +514,7 @@ class Tor:
             if {"vanilla": 800, "obfs4": 5000}.get(bridge_type, 20) >= len(processed_bridges):
                 CONSOLE.log("[red][Error] Error when validating the bridges, bridges were either not downloaded correctly or the bridge page was compromised, use of default bridges")
             else:
-                with open(bridges_path, "w") as writeable_file:
+                with open(bridge_path, "w") as writeable_file:
                     json.dump(processed_bridges, writeable_file)
         
         return
