@@ -11,7 +11,7 @@ if __name__ != "__main__":
 from rich.console import Console
 from utils import clear_console, get_system_architecture, Tor, download_file, get_gnupg_path, Linux, SecureDelete
 import os
-from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, BRIDGE_DOWNLOAD_URLS, IP_VERSIONS
+from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES
 import subprocess
 import tarfile
 import json
