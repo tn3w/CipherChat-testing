@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 import time
 import socket
 import json
+import sys
 import requests
 from bs4 import BeautifulSoup
 from rich.progress import Progress
@@ -31,7 +32,7 @@ from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
 
 if __name__ == "__main__":
     print("Use `python main.py`")
-    exit(0)
+    sys.exit(0)
 
 LOGO = '''
  dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
@@ -66,7 +67,8 @@ def get_system_architecture() -> Tuple[str, str]:
 
     return system, machine
 
-def generate_random_string(length: int, with_punctuation: bool = True, with_letters: bool = True) -> str:
+def generate_random_string(length: int, with_punctuation: bool = True,
+                           with_letters: bool = True) -> str:
     """
     Generates a random string
 
@@ -86,7 +88,8 @@ def generate_random_string(length: int, with_punctuation: bool = True, with_lett
     random_string = ''.join(secrets.choice(characters) for _ in range(length))
     return random_string
 
-def download_file(url: str, dict_path: str, operation_name: Optional[str] = None, file_name: Optional[str] = None,\
+def download_file(url: str, dict_path: str,
+                  operation_name: Optional[str] = None, file_name: Optional[str] = None,
                   session: requests.Session = requests.Session()) -> Optional[str]:
     """
     Function to download a file
@@ -106,7 +109,7 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
 
     if os.path.isfile(save_path):
         return save_path
-    
+
     progress = Progress()
 
     with progress:
@@ -114,18 +117,24 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
 
         with open(save_path, 'wb') as file:
             try:
-                response = session.get(url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)}, timeout=5)
+                response = session.get(
+                    url, stream=True, headers={'User-Agent': random.choice(USER_AGENTS)}, timeout=5
+                )
                 response.raise_for_status()
-            except:
+            except Exception as e:
+                CONSOLE.log(f"[red][Error] Error downloading the file: '{e}'")
                 return None
 
             if response.status_code == 200:
                 total_length = int(response.headers.get('content-length'))
 
                 if operation_name:
-                    task = progress.add_task(f"[cyan]Downloading {operation_name}...", total=total_length)
+                    task = progress.add_task(
+                        f"[cyan]Downloading {operation_name}...",
+                        total=total_length
+                    )
                 else:
-                    task = progress.add_task(f"[cyan]Downloading...", total=total_length)
+                    task = progress.add_task("[cyan]Downloading...", total=total_length)
 
                 for chunk in response.iter_content(chunk_size=1024):
                     if chunk:
@@ -135,22 +144,25 @@ def download_file(url: str, dict_path: str, operation_name: Optional[str] = None
                         progress.update(task, completed=downloaded_bytes)
             else:
                 return None
-            
+
     return save_path
 
 def get_gnupg_path() -> str:
     "Function to query the GnuPG path"
 
-    gnupg_path = {"Windows": fr"C:\\Program Files (x86)\\GNU\\GnuPG\\gpg.exe", "macOS": "/usr/local/bin/gpg"}.get(SYSTEM, "/usr/bin/gpg")
+    gnupg_path = {
+        "Windows": r"C:\\Program Files (x86)\\GNU\\GnuPG\\gpg.exe",
+        "macOS": "/usr/local/bin/gpg"
+    }.get(SYSTEM, "/usr/bin/gpg")
 
     command = {"Windows": "where gpg"}.get(SYSTEM, "which gpg")
 
     try:
         result = subprocess.check_output(command, shell=True, text=True)
         gnupg_path = result.strip()
-    except:
-        pass
-    
+    except Exception as e:
+        CONSOLE.log(f"[red][Error] Error when requesting pgp: '{e}'")
+
     return gnupg_path
 
 SYSTEM, MACHINE = get_system_architecture()
@@ -193,7 +205,8 @@ class SecureDelete:
     @staticmethod
     def file(file_path: str, quite: bool = False) -> None:
         """
-        Function to securely delete a file by replacing it first with random characters and then according to Gutmann patterns and DoD 5220.22-M patterns
+        Function to securely delete a file by replacing it first with random characters and
+        then according to Gutmann patterns and DoD 5220.22-M patterns
 
         :param file_path: The path to the file
         :param quite: If True nothing is written to the console
@@ -205,7 +218,11 @@ class SecureDelete:
         file_size_times_two = file_size * 2
 
         gutmann_patterns = [bytes([i % 256] * (file_size_times_two)) for i in range(35)]
-        dod_patterns = [bytes([0x00] * file_size_times_two), bytes([0xFF] * file_size_times_two), bytes([0x00] * file_size_times_two)]
+        dod_patterns = [
+            bytes([0x00] * file_size_times_two),
+            bytes([0xFF] * file_size_times_two),
+            bytes([0x00] * file_size_times_two)
+        ]
 
         for _ in range(10):
             try:
@@ -234,8 +251,8 @@ class SecureDelete:
 
             try:
                 os.remove(file_path)
-            except:
-                pass
+            except Exception as e:
+                CONSOLE.log(f"[red][Error] Error deleting the file '{file_path}': {e}")
     
     @staticmethod
     def directory(directory_path: str, quite: bool = False) -> None:
@@ -258,15 +275,15 @@ class SecureDelete:
                     shutil.rmtree(directory)
                 except Exception as e:
                     if not quite:
-                        print(f"[Error] Error deleting directory '{directory}': {e}")
+                        CONSOLE.log(f"[red][Error] Error deleting directory '{directory}': {e}")
 
             try:
                 shutil.rmtree(directory_path)
             except Exception as e:
                 if not quite:
-                    print(f"[Error] Error deleting directory '{directory_path}': {e}")
+                    CONSOLE.log(f"[red][Error] Error deleting directory '{directory_path}': {e}")
 
-class Linux: 
+class Linux:
     "Collection of functions that have something to do with Linux"
 
     @staticmethod
@@ -275,10 +292,12 @@ class Linux:
 
         distro_id = distro.id()
 
-        package_manager = DISTRO_TO_PACKAGE_MANAGER.get(distro_id, {"installation_command": None, "update_command": None})
+        package_manager = DISTRO_TO_PACKAGE_MANAGER.get(
+            distro_id, {"installation_command": None, "update_command": None}
+        )
 
         installation_command, update_command = package_manager["installation_command"], package_manager["update_command"]
-        
+
         if None in [installation_command, update_command]:
             for package_manager in PACKAGE_MANAGERS:
                 try:
@@ -287,9 +306,9 @@ class Linux:
                     pass
                 else:
                     installation_command, update_command = package_manager["installation_command"], package_manager["update_command"]
-        
+
         return installation_command, update_command
-    
+
     @staticmethod
     def install_package(package_name: str) -> None:
         """
@@ -297,7 +316,7 @@ class Linux:
         
         :param package_name: Name of the Linux packet
         """
-        
+
         with CONSOLE.status("[green]Trying to get package manager..."):
             installation_command, update_command = Linux.get_package_manager()
         CONSOLE.log(f"[green]~ Package Manager is `{installation_command.split(' ')[0]}`")
@@ -308,10 +327,10 @@ class Linux:
                 update_process.wait()
             except Exception as e:
                 CONSOLE.log(f"[red]Error using update Command while installing linux package '{package_name}': '{e}'")
-            
+
             install_process = subprocess.Popen(f"sudo {installation_command} {package_name} -y", shell=True)
             install_process.wait()
-        
+
         else:
             CONSOLE.log("[red]No packet manager found for the current Linux system, you seem to use a distribution we don't know?")
             raise Exception("No package manager found!")
@@ -319,164 +338,35 @@ class Linux:
         return None
 
 SYSTEM, MACHINE = get_system_architecture()
-TOR_EXECUTABLE_PATH = {"Windows": os.path.join(DATA_DIR_PATH, "tor/tor/tor.exe")}.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
+TOR_EXECUTABLE_PATH = {
+    "Windows": os.path.join(DATA_DIR_PATH, "tor/tor/tor.exe")
+}.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
 PLUGGABLE_TRANSPORTS_PATH = os.path.join(DATA_DIR_PATH, "tor", "tor", "pluggable_transports")
-SNOWFLAKE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "snowflake-client.exe"}.get(SYSTEM, "snowflake-client"))
-WEBTUNNEL_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "webtunnel-client.exe"}.get(SYSTEM, "webtunnel-client"))
-LYREBIRD_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "lyrebird.exe"}.get(SYSTEM, "lyrebird"))
-CONJURE_EXECUTABLE_PATH = os.path.join(PLUGGABLE_TRANSPORTS_PATH, {"Windows": "conjure-client.exe"}.get(SYSTEM, "lyrebird"))
+SNOWFLAKE_EXECUTABLE_PATH = os.path.join(
+    PLUGGABLE_TRANSPORTS_PATH, {"Windows": "snowflake-client.exe"}.get(SYSTEM, "snowflake-client")
+)
+WEBTUNNEL_EXECUTABLE_PATH = os.path.join(
+    PLUGGABLE_TRANSPORTS_PATH, {"Windows": "webtunnel-client.exe"}.get(SYSTEM, "webtunnel-client")
+)
+LYREBIRD_EXECUTABLE_PATH = os.path.join(
+    PLUGGABLE_TRANSPORTS_PATH, {"Windows": "lyrebird.exe"}.get(SYSTEM, "lyrebird")
+)
+CONJURE_EXECUTABLE_PATH = os.path.join(
+    PLUGGABLE_TRANSPORTS_PATH, {"Windows": "conjure-client.exe"}.get(SYSTEM, "lyrebird")
+)
 TOR_DATA_DIR2_PATH = os.path.join(DATA_DIR_PATH, "tor", "data2")
 
-class Tor:
-
-    @staticmethod
-    def get_download_link() -> Tuple[Optional[str], Optional[str]]:
-        "Request https://www.torproject.org to get the latest download links"
-
-        response = requests.get("https://www.torproject.org/download/tor/", headers={'User-Agent': random.choice(USER_AGENTS)})
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        anchors = soup.find_all('a')
-
-        download_url = None
-        signature_url = None
-
-        for anchor in anchors:
-            href = anchor.get('href')
-
-            if href:
-                if "archive.torproject.org/tor-package-archive/torbrowser" in href:
-                    if SYSTEM.lower() in href and "tor-expert-bundle" in href and MACHINE.lower() in href:
-                        if href.endswith(".asc"):
-                            signature_url = href
-                        else:
-                            download_url = href
-
-                        if not None in [signature_url, download_url]:
-                            break
-        
-        return (download_url, signature_url)
-    
-    @staticmethod
-    def terminate_tor_processes():
-        try:
-            for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-                    if "tor" == process.name().strip():
-                        process.terminate()
-        except:
-            pass
-    
-    @staticmethod
-    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list, is_service: bool = False) -> Tuple[str, subprocess.Popen]:
-        random_password = generate_random_string(16)
-
-        tor_process = subprocess.Popen([TOR_EXECUTABLE_PATH, "--hash-password", random_password], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        hashed_password, _ = tor_process.communicate()
-        hashed_password = hashed_password.strip().decode()
-
-        temp_config_path = os.path.join(DATA_DIR_PATH, "torrc")
-
-        with open(temp_config_path, 'w+') as temp_config:
-            temp_config.write(f"ControlPort {control_port}\n")
-            temp_config.write(f"HashedControlPassword {hashed_password}\n")
-            temp_config.write(f"SocksPort {socks_port}\n")
-
-            if is_service:
-                if not os.path.isdir(TOR_DATA_DIR2_PATH):
-                    os.mkdir(TOR_DATA_DIR2_PATH)
-                temp_config.write(f"DataDirectory {TOR_DATA_DIR2_PATH}\n")
-
-            if not len(bridges) == 0:
-                temp_config.write(f"UseBridges 1\n")
-                temp_config.write(f"ClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\n")
-                temp_config.write(f"ClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\n")
-                temp_config.write(f"ClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\n")
-                temp_config.write(f"ClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}\n")
-
-            for bridge in bridges:
-                temp_config.write(f"Bridge {bridge}\n")
-        
-        tor_process = subprocess.Popen(
-            [TOR_EXECUTABLE_PATH, "-f", temp_config_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-            close_fds=True
-        )
-
-        warn_time = None
-
-        while True:
-            line = tor_process.stdout.readline().decode().strip()
-            if line:
-                print(line)
-                if "[notice] Bootstrapped 100% (done): Done" in line:
-                    break
-
-                if warn_time is None:
-                    if "[err]" in line or "[warn]" in line:
-                        warn_time = int(time.time())
-                
-            if not warn_time is None:
-                if warn_time + 10 < int(time.time()):
-                    break
-
-        with Controller.from_port(port=control_port) as controller:
-            try:
-                controller.authenticate(password=random_password)
-            except:
-                Tor.terminate_tor_processes()
-            else:
-                start_time = time.time()
-                while not controller.is_alive():
-                    if time.time() - start_time > 30:
-                        raise TimeoutError("Timeout!")
-                    time.sleep(1)
-        
-        os.remove(temp_config_path)
-        
-        return random_password, tor_process
-    
-    @staticmethod
-    def send_shutdown_signal(control_port: int, control_password: str) -> None:
-        try:
-            with Controller.from_port(port=control_port) as controller:
-                controller.authenticate(password=control_password)
-
-                controller.signal(Signal.SHUTDOWN)
-        except:
-            Tor.terminate_tor_processes()
-    
-    @staticmethod
-    def send_new_identity_signal(control_port: int, control_password: str) -> None:
-        try:
-            with Controller.from_port(port=control_port) as controller:
-                controller.authenticate(password=control_password)
-
-                controller.signal(Signal.NEWNYM)
-        except:
-            pass
-    
-    @staticmethod
-    def get_requests_session(control_port: int, control_password: str, socks_port: int) -> requests.Session:
-        if secrets.choice([True] + [False] * 8):
-            Tor.send_new_identity_signal(control_port, control_password)
-        
-        session = requests.Session()
-
-        session.proxies = {
-            'http': 'socks5h://127.0.0.1:' + str(socks_port),
-            'https': 'socks5h://127.0.0.1:' + str(socks_port)
-        }
-
-        return session
-
 class Bridge:
+    "Includes all functions that have something to do with Tor bridges"
 
     @staticmethod
     def _get_type(bridge: str) -> str:
+        """
+        Returns the type of a given bridge
+        
+        :param bridge: A Tor bridge
+        """
+
         for bridge_type in ["obfs4", "webtunnel", "snowflake", "meek_lite"]:
             if bridge.startswith(bridge_type):
                 return bridge_type
@@ -484,14 +374,29 @@ class Bridge:
 
     @staticmethod
     def _is_socket_bridge_online(bridge_address: str, bridge_port: int, timeout: int = 3) -> bool:
+        """
+        Request a bridge with socks to check that it is online
+
+        :param bridge_address: The bridges ipv4 or ipv6 or domain
+        :param bridge_port: The port of a bridge
+        :param timeout: Time in seconds after which a bridge is no longer considered online if it has not responded
+        """
+
         try:
-            with socket.create_connection((bridge_address, bridge_port), timeout=timeout) as s:
+            with socket.create_connection((bridge_address, bridge_port), timeout=timeout):
                 return True
         except:
             return False
 
     @staticmethod
     def _is_webtunnel_bridge_online(webtunnel_url: str, timeout: int = 3) -> bool:
+        """
+        Requests a WebTunnel to check if it is online
+
+        :param webtunnel_url: The url to the WebTunnel
+        :param timeout: Time in seconds after which a bridge is no longer considered online if it has not responded
+        """
+
         try:
             requests.get(webtunnel_url, timeout=timeout, headers={'User-Agent': random.choice(USER_AGENTS)})
             return True
@@ -500,17 +405,30 @@ class Bridge:
 
     @staticmethod
     def download(bridge_type, session: requests.Session):
+        """
+        Downloads a bridge file from GitHub
+
+        :param bridge_type: Type of bridge
+        :param session: Session configured with Socks Proxy Ports
+        """
+
         download_urls = BRIDGE_DOWNLOAD_URLS[bridge_type]
         bridge_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
 
-        file_path = download_file(download_urls["github"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
+        file_path = download_file(
+            download_urls["github"], TEMP_DIR_PATH,
+            bridge_type.title() + " Bridges", bridge_type + ".txt", session
+        )
         if file_path is None:
-            file_path = download_file(download_urls["backup"], TEMP_DIR_PATH, bridge_type.title() + " Bridges", bridge_type + ".txt", session)
+            file_path = download_file(
+                download_urls["backup"], TEMP_DIR_PATH,
+                bridge_type.title() + " Bridges", bridge_type + ".txt", session
+            )
 
         if not os.path.isfile(file_path):
             CONSOLE.log("[red][Error] Error when downloading bridges, use of default bridges")
         else:
-            with open(file_path, "r") as readable_file:
+            with open(file_path, "r", encoding = "utf-8") as readable_file:
                 unprocessed_bridges = readable_file.read()
 
             processed_bridges = [bridge.strip() for bridge in unprocessed_bridges.split("\n") if bridge.strip()]
@@ -518,11 +436,18 @@ class Bridge:
             if {"vanilla": 800, "obfs4": 5000}.get(bridge_type, 20) >= len(processed_bridges):
                 CONSOLE.log("[red][Error] Error when validating the bridges, bridges were either not downloaded correctly or the bridge page was compromised, use of default bridges")
             else:
-                with open(bridge_path, "w") as writeable_file:
+                with open(bridge_path, "w", encoding = "utf-8") as writeable_file:
                     json.dump(processed_bridges, writeable_file)
 
     @staticmethod
     def select_random(all_bridges: list, quantity: int = 3) -> list:
+        """
+        Randomly selects bridges and asks them to check if they are online
+
+        :param all_bridges: All existing bridges in one list
+        :param quantity: How many bridges should be selected
+        """
+
         if len(all_bridges) == 1:
             return all_bridges
 
@@ -560,12 +485,12 @@ class Bridge:
                         random_bridge = secrets.choice(bridge_types[random_type])
                 else:
                     random_bridge = next(iter(bridge_types[random_type]))
-                    
+
                     if random_bridge in checked_bridges:
                         break
 
                 found_bridge = False
-                
+
                 if random_type in ["vanilla", "obfs4"]:
                     processed_bridge = random_bridge.replace("obfs4 ", "")
                     bridge_address = processed_bridge.split(":")[0]
@@ -592,9 +517,15 @@ class Bridge:
                 break
 
         return selected_bridges
-    
+
     @staticmethod
-    def choose_buildin(bridge_type):
+    def choose_buildin(bridge_type: str) -> list:
+        """
+        Selects Random Buildin bridges
+
+        :param bridge_type: Type of bridge
+        """
+
         with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
             if not bridge_type == "random":
                 default_bridges = DEFAULT_BRIDGES[bridge_type]
@@ -604,5 +535,189 @@ class Bridge:
                 for _, specific_bridges in DEFAULT_BRIDGES.items():
                     default_bridges.extend(specific_bridges)
                 bridges = Bridge.select_random(default_bridges, 6)
-        
+
         return bridges
+
+class Tor:
+    "All functions that have something to do with the Tor network"
+
+    @staticmethod
+    def get_download_link() -> Tuple[Optional[str], Optional[str]]:
+        "Request https://www.torproject.org to get the latest download links"
+
+        response = requests.get(
+            "https://www.torproject.org/download/tor/",
+            headers={'User-Agent': random.choice(USER_AGENTS)},
+            timeout = 5
+        )
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        anchors = soup.find_all('a')
+
+        download_url = None
+        signature_url = None
+
+        for anchor in anchors:
+            href = anchor.get('href')
+
+            if href:
+                if "archive.torproject.org/tor-package-archive/torbrowser" in href:
+                    if SYSTEM.lower() in href and "tor-expert-bundle" in href and MACHINE.lower() in href:
+                        if href.endswith(".asc"):
+                            signature_url = href
+                        else:
+                            download_url = href
+
+                        if not None in [signature_url, download_url]:
+                            break
+
+        return (download_url, signature_url)
+
+    @staticmethod
+    def terminate_tor_processes():
+        "Function to try to stop a broken Tor service"
+
+        try:
+            for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+                if "tor" == process.name().strip():
+                    process.terminate()
+        except:
+            pass
+
+    @staticmethod
+    def launch_tor_with_config(control_port: int, socks_port: int, bridges: list,
+                               is_service: bool = False) -> Tuple[str, subprocess.Popen]:
+        """
+        Starts Tor with the given configurations and bridges
+
+        :param control_port: Tor control port to control the connection
+        :param socks_port: Tor Socks Port, sets the port for Socks Proxy connections via Tor
+        :param bridges: Bridges to conceal the connection to Tor from evil entities
+        :param is_service: If True, use of other data directory so that two Tor clients can run in parallel
+        """
+
+        random_password = generate_random_string(16)
+
+        tor_process = subprocess.Popen(
+            [TOR_EXECUTABLE_PATH, "--hash-password", random_password],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        hashed_password, _ = tor_process.communicate()
+        hashed_password = hashed_password.strip().decode()
+
+        temp_config_path = os.path.join(DATA_DIR_PATH, "torrc")
+
+        with open(temp_config_path, 'w+', encoding = 'utf-8') as temp_config:
+            temp_config.write(f"ControlPort {control_port}\n")
+            temp_config.write(f"HashedControlPassword {hashed_password}\n")
+            temp_config.write(f"SocksPort {socks_port}\n")
+
+            if is_service:
+                if not os.path.isdir(TOR_DATA_DIR2_PATH):
+                    os.mkdir(TOR_DATA_DIR2_PATH)
+                temp_config.write(f"DataDirectory {TOR_DATA_DIR2_PATH}\n")
+
+            if not len(bridges) == 0:
+                temp_config.write(f"UseBridges 1\nClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\nClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\nClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\nClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}")
+            for bridge in bridges:
+                temp_config.write(f"Bridge {bridge}\n")
+
+        tor_process = subprocess.Popen(
+            [TOR_EXECUTABLE_PATH, "-f", temp_config_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            close_fds=True
+        )
+
+        warn_time = None
+
+        while True:
+            line = tor_process.stdout.readline().decode().strip()
+            if line:
+                print(line)
+                if "[notice] Bootstrapped 100% (done): Done" in line:
+                    break
+
+                if warn_time is None:
+                    if "[err]" in line or "[warn]" in line:
+                        warn_time = int(time.time())
+
+            if not warn_time is None:
+                if warn_time + 10 < int(time.time()):
+                    break
+
+        with Controller.from_port(port=control_port) as controller:
+            try:
+                controller.authenticate(password=random_password)
+            except:
+                Tor.terminate_tor_processes()
+            else:
+                start_time = time.time()
+                while not controller.is_alive():
+                    if time.time() - start_time > 30:
+                        raise TimeoutError("Timeout!")
+                    time.sleep(1)
+
+        os.remove(temp_config_path)
+
+        return random_password, tor_process
+
+    @staticmethod
+    def send_shutdown_signal(control_port: int, control_password: str) -> None:
+        """
+        Sends the signal to terminate Tor
+
+        :param control_port: Tor control port to control the connection
+        :param control_password: Password to authorize Tor
+        """
+
+        try:
+            with Controller.from_port(port=control_port) as controller:
+                controller.authenticate(password=control_password)
+
+                controller.signal(Signal.SHUTDOWN)
+        except:
+            Tor.terminate_tor_processes()
+
+    @staticmethod
+    def send_new_identity_signal(control_port: int, control_password: str) -> None:
+        """
+        Sends the signal to generate a new identity
+
+        :param control_port: Tor control port to control the connection
+        :param control_password: Password to authorize Tor
+        """
+
+        try:
+            with Controller.from_port(port=control_port) as controller:
+                controller.authenticate(password=control_password)
+
+                controller.signal(Signal.NEWNYM)
+        except:
+            pass
+
+    @staticmethod
+    def get_requests_session(control_port: int, control_password: str,
+                             socks_port: int) -> requests.Session:
+        """
+        Returns a requests.session object with the gate socks set
+
+        :param control_port: Tor control port to control the connection
+        :param control_password: Password to authorize Tor
+        :param socks_port: Tor Socks Port, sets the port for Socks Proxy connections via Tor
+        """
+
+        if secrets.choice([True] + [False] * 8):
+            Tor.send_new_identity_signal(control_port, control_password)
+
+        session = requests.Session()
+
+        session.proxies = {
+            'http': 'socks5h://127.0.0.1:' + str(socks_port),
+            'https': 'socks5h://127.0.0.1:' + str(socks_port)
+        }
+
+        return session
