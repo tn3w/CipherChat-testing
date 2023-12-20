@@ -231,6 +231,8 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
         return abort(404)
         return PUBLIC_KEY
     
+    app.run(host = webservice_host, port = webservice_host)
+
     atexit_terminate_tor()
     sys.exit(0)
 
