@@ -638,7 +638,7 @@ class Tor:
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
 
-            if isinstance(other_configuration, list):
+            if not other_configuration is None:
                 for configuration in other_configuration:
                     temp_config.write(f"{configuration}\n")
 
@@ -679,7 +679,7 @@ class Tor:
                         raise TimeoutError("Timeout!")
                     time.sleep(1)
 
-        os.remove(temp_config_path)
+        #os.remove(temp_config_path)
 
         return tor_process, control_password
 

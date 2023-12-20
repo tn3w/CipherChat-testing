@@ -158,14 +158,15 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     socks_port = configuration.get("socks_port", socks_port)
     hidden_service_dir = configuration["hidden_service_directory"]
     webservice_host, webservice_port = configuration["webservice_host"], configuration["webservice_port"]
+    webservice_host = webservice_host.replace("localhost", "127.0.0.1")
     without_ui = configuration["without_ui"]
 
     with CONSOLE.status("[green]Starting Tor Executable..."):
         tor_process, control_password = Tor.launch_tor_with_config(
             control_port, socks_port, [], True, control_password,
             {
-                f"HiddenServiceDir {hidden_service_dir}",
-                f"HiddenServicePort 80 {webservice_host}:{webservice_port}"
+                f"HiddenServicePort 80 {webservice_host}:{webservice_port}",
+                f"HiddenServiceDir {hidden_service_dir}"
             }
         )
 
@@ -186,6 +187,8 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
             HOSTNAME = readable_file.read()
     except:
         HOSTNAME = "???"
+    
+    CONSOLE.print(f"[bright_blue]TOR Hidden Service:", HOSTNAME)
 
     ASYMMETRIC_ENCRYPTION = AsymmetricEncryption().generate_keys()
     PUBLIC_KEY, PRIVATE_KEY = ASYMMETRIC_ENCRYPTION.public_key, ASYMMETRIC_ENCRYPTION.private_key
@@ -231,7 +234,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
         return abort(404)
         return PUBLIC_KEY
     
-    app.run(host = webservice_host, port = webservice_host)
+    app.run(host = webservice_host, port = webservice_port)
 
     atexit_terminate_tor()
     sys.exit(0)
