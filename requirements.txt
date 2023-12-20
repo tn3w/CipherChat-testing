@@ -5,3 +5,5 @@ distro
 stem
 psutil
 pysocks
+cryptography
+flask

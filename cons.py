@@ -1,9 +1,13 @@
-# ~~~
-# This is a copy of the free chat program "CipherChat" under GPL-3.0 license
-# GitHub: https://github.com/tn3w/CipherChat
-# ~~~
+""" 
+~-~-~-~
+This is a copy of the free chat program "CipherChat" under GPL-3.0 license
+GitHub: https://github.com/tn3w/CipherChat
+~-~-~-~
+"""
 
 import os
+
+VERSION = 1.18
 
 CURRENT_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR_PATH = os.path.join(CURRENT_DIR_PATH, "data")

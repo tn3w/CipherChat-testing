@@ -6,7 +6,7 @@ GitHub: https://github.com/tn3w/CipherChat
 """
 
 import os
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import platform
 import secrets
 import random
@@ -19,6 +19,8 @@ import time
 import socket
 import json
 import sys
+import hashlib
+from base64 import urlsafe_b64encode, urlsafe_b64decode, b64encode, b64decode
 import requests
 from bs4 import BeautifulSoup
 from rich.progress import Progress
@@ -27,6 +29,11 @@ import distro
 from stem.control import Controller
 from stem import Signal
 import psutil
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization, padding as sym_padding
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding as asy_padding
 from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
                  DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES
 
@@ -538,6 +545,8 @@ class Bridge:
 
         return bridges
 
+HIDDEN_SERVICE_CONF_FILE = os.path.join(DATA_DIR_PATH, "hidden-service.conf")
+
 class Tor:
     "All functions that have something to do with the Tor network"
 
@@ -588,7 +597,9 @@ class Tor:
 
     @staticmethod
     def launch_tor_with_config(control_port: int, socks_port: int, bridges: list,
-                               is_service: bool = False) -> Tuple[str, subprocess.Popen]:
+                               is_service: bool = False, control_password: Optional[str] = None,
+                               other_configuration: Optional[list] = None
+                               ) -> Tuple[subprocess.Popen, str]:
         """
         Starts Tor with the given configurations and bridges
 
@@ -596,12 +607,15 @@ class Tor:
         :param socks_port: Tor Socks Port, sets the port for Socks Proxy connections via Tor
         :param bridges: Bridges to conceal the connection to Tor from evil entities
         :param is_service: If True, use of other data directory so that two Tor clients can run in parallel
+        :param control_password: Password, to control the control port (Optional)
+        :param other_configuration: Other configurations for the torrc file (Optional)
         """
 
-        random_password = generate_random_string(16)
+        if control_password is None:
+            control_password = generate_random_string(16)
 
         tor_process = subprocess.Popen(
-            [TOR_EXECUTABLE_PATH, "--hash-password", random_password],
+            [TOR_EXECUTABLE_PATH, "--hash-password", control_password],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         hashed_password, _ = tor_process.communicate()
@@ -623,6 +637,10 @@ class Tor:
                 temp_config.write(f"UseBridges 1\nClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\nClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\nClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\nClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}")
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
+
+            if isinstance(other_configuration, list):
+                for configuration in other_configuration:
+                    temp_config.write(f"{configuration}\n")
 
         tor_process = subprocess.Popen(
             [TOR_EXECUTABLE_PATH, "-f", temp_config_path],
@@ -651,7 +669,7 @@ class Tor:
 
         with Controller.from_port(port=control_port) as controller:
             try:
-                controller.authenticate(password=random_password)
+                controller.authenticate(password=control_password)
             except:
                 Tor.terminate_tor_processes()
             else:
@@ -663,7 +681,7 @@ class Tor:
 
         os.remove(temp_config_path)
 
-        return random_password, tor_process
+        return tor_process, control_password
 
     @staticmethod
     def send_shutdown_signal(control_port: int, control_password: str) -> None:
@@ -721,3 +739,431 @@ class Tor:
         }
 
         return session
+
+    @staticmethod
+    def get_ports(as_hidden_service = False) -> Tuple[int, int]:
+        """
+        Function for getting control and socks port
+        
+        :param as_hidden_service: If True, other ports are used
+        """
+
+        control_port, socks_port, random_range = {
+            True: (5030, 5031, 5000)
+        }.get(as_hidden_service, (9030, 9031, 9000))
+
+        def is_port_in_use(port):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    return s.connect_ex(('127.0.0.1', port)) == 0
+            except:
+                return False
+            
+        def find_avaiable_port(without_port = None):
+            while True:
+                random_port = secrets.randbelow(random_range) + 1000
+                if random_port == without_port:
+                    continue
+                if not is_port_in_use(random_port):
+                    return random_port
+        
+        if is_port_in_use(control_port):
+            control_port = find_avaiable_port(socks_port)
+        if is_port_in_use(socks_port):
+            socks_port = find_avaiable_port(control_port)
+        
+        return control_port, socks_port
+    
+    @staticmethod
+    def get_hidden_service_config() -> dict:
+        "Loads the hidden service configuration"
+
+        hidden_service_conf = {
+            "hidden_service_directory": os.path.join(DATA_DIR_PATH, "hidden_service"),
+            "webservice_host": "localhost",
+            "webservice_port": 8080,
+            "without_ui": False
+        }
+
+        if os.path.isfile(HIDDEN_SERVICE_CONF_FILE):
+            try:
+                with open(HIDDEN_SERVICE_CONF_FILE, "r", encoding = "utf-8") as readable_file:
+                    loaded_configuration = json.load(readable_file)
+                hidden_service_conf.update(loaded_configuration)
+            except:
+                pass
+
+        return hidden_service_conf
+
+class FastHashing:
+    "Implementation for fast hashing"
+
+    def __init__(self, salt: Optional[str] = None, without_salt: bool = False):
+        """
+        :param salt: The salt, makes the hashing process more secure (Optional)
+        :param without_salt: If True, no salt is added to the hash
+        """
+
+        self.salt = salt
+        self.without_salt = without_salt
+
+    def hash(self, plain_text: str, hash_length: int = 8) -> str:
+        """
+        Function to hash a plaintext
+
+        :param plain_text: The text to be hashed
+        :param hash_length: The length of the returned hashed value
+        """
+
+        if not self.without_salt:
+            salt = self.salt
+            if salt is None:
+                salt = secrets.token_hex(hash_length)
+            plain_text = salt + plain_text
+
+        hash_object = hashlib.sha256(plain_text.encode())
+        hex_dig = hash_object.hexdigest()
+
+        if not self.without_salt:
+            hex_dig += "//" + salt
+        return hex_dig
+
+    def compare(self, plain_text: str, hashed_value: str) -> bool:
+        """
+        Compares a plaintext with a hashed value
+
+        :param plain_text: The text that was hashed
+        :param hashed_value: The hashed value
+        """
+
+        salt = None
+        if not self.without_salt:
+            salt = self.salt
+            if "//" in hashed_value:
+                hashed_value, salt = hashed_value.split("//")
+
+        hash_length = len(hashed_value)
+
+        comparison_hash = FastHashing(salt=salt, without_salt = self.without_salt)\
+            .hash(plain_text, hash_length = hash_length).split("//")[0]
+
+        return comparison_hash == hashed_value
+
+
+class Hashing:
+    "Implementation of secure hashing with SHA256 and 200000 iterations"
+
+    def __init__(self, salt: Optional[str] = None, without_salt: bool = False):
+        """
+        :param salt: The salt, makes the hashing process more secure (Optional)
+        :param without_salt: If True, no salt is added to the hash
+        """
+
+        self.salt = salt
+        self.without_salt = without_salt
+
+    def hash(self, plain_text: str, hash_length: int = 32) -> str:
+        """
+        Function to hash a plaintext
+
+        :param plain_text: The text to be hashed
+        :param hash_length: The length of the returned hashed value
+        """
+
+        plain_text = str(plain_text).encode('utf-8')
+
+        if not self.without_salt:
+            salt = self.salt
+            if salt is None:
+                salt = secrets.token_bytes(32)
+            else:
+                if not isinstance(salt, bytes):
+                    try:
+                        salt = bytes.fromhex(salt)
+                    except:
+                        salt = salt.encode('utf-8')
+        else:
+            salt = None
+
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=hash_length,
+            salt=salt,
+            iterations=200000,
+            backend=default_backend()
+        )
+
+        hashed_data = kdf.derive(plain_text)
+
+        if not self.without_salt:
+            hashed_value = b64encode(hashed_data).decode('utf-8') + "//" + salt.hex()
+        else:
+            hashed_value = b64encode(hashed_data).decode('utf-8')
+
+        return hashed_value
+
+    def compare(self, plain_text: str, hashed_value: str) -> bool:
+        """
+        Compares a plaintext with a hashed value
+
+        :param plain_text: The text that was hashed
+        :param hashed_value: The hashed value
+        """
+
+        if not self.without_salt:
+            salt = self.salt
+            if "//" in hashed_value:
+                hashed_value, salt = hashed_value.split("//")
+
+            if salt is None:
+                raise ValueError("Salt cannot be None if there is no salt in hash")
+
+            salt = bytes.fromhex(salt)
+        else:
+            salt = None
+
+        hash_length = len(b64decode(hashed_value))
+
+        comparison_hash = Hashing(salt=salt, without_salt = self.without_salt)\
+            .hash(plain_text, hash_length = hash_length).split("//")[0]
+
+        return comparison_hash == hashed_value
+
+
+class SymmetricEncryption:
+    "Implementation of symmetric encryption with AES"
+
+    def __init__(self, password: Optional[str] = None, salt_length: int = 32):
+        """
+        :param password: A secure encryption password, should be at least 32 characters long
+        :param salt_length: The length of the salt, should be at least 16
+        """
+
+        self.password = password.encode()
+        self.salt_length = salt_length
+
+    def encrypt(self, plain_text: str) -> str:
+        """
+        Encrypts a text
+
+        :param plaintext: The text to be encrypted
+        """
+
+        salt = secrets.token_bytes(self.salt_length)
+
+        kdf_ = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        key = kdf_.derive(self.password)
+
+        iv = secrets.token_bytes(16)
+
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv),
+                        backend=default_backend())
+        encryptor = cipher.encryptor()
+        padder = sym_padding.PKCS7(algorithms.AES.block_size).padder()
+        padded_data = padder.update(plain_text.encode()) + padder.finalize()
+        ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+
+        return urlsafe_b64encode(salt + iv + ciphertext).decode()
+
+    def decrypt(self, cipher_text: str) -> str:
+        """
+        Decrypts a text
+
+        :param ciphertext: The encrypted text
+        """
+
+        cipher_text = urlsafe_b64decode(cipher_text.encode())
+
+        salt, iv, cipher_text = cipher_text[:self.salt_length], cipher_text[
+            self.salt_length:self.salt_length + 16], cipher_text[self.salt_length + 16:]
+
+        kdf_ = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        key = kdf_.derive(self.password)
+
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv),
+                        backend=default_backend())
+        decryptor = cipher.decryptor()
+        unpadder = sym_padding.PKCS7(algorithms.AES.block_size).unpadder()
+        decrypted_data = decryptor.update(cipher_text) + decryptor.finalize()
+        plaintext = unpadder.update(decrypted_data) + unpadder.finalize()
+
+        return plaintext.decode()
+
+
+class AsymmetricEncryption:
+    "Implementation of secure asymmetric encryption with RSA"
+
+    def __init__(self, public_key: Optional[str] = None, private_key: Optional[str] = None):
+        """
+        :param public_key: The public key to encrypt a message / to verify a signature
+        :param private_key: The private key to decrypt a message / to create a signature
+        """
+
+        self.public_key, self.private_key = public_key, private_key
+
+        if not public_key is None:
+            self.publ_key = serialization.load_der_public_key(
+                public_key.encode('latin-1'), backend=default_backend()
+            )
+        else:
+            self.publ_key = None
+
+        if not private_key is None:
+            self.priv_key = serialization.load_der_private_key(
+                private_key.encode('latin-1'), password=None, backend=default_backend()
+            )
+        else:
+            self.priv_key = None
+
+    def generate_keys(self, key_size: int = 2048) -> "AsymmetricEncryption":
+        """
+        Generates private and public key
+
+        :param key_size: The key size of the private key
+        """
+        self.priv_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=key_size,
+            backend=default_backend()
+        )
+        self.private_key = self.priv_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('latin-1')
+
+        self.publ_key = self.priv_key.public_key()
+        self.public_key = self.publ_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('latin-1')
+
+        return self
+
+    def encrypt(self, plain_text: str) -> Tuple[str, str]:
+        """
+        Encrypt the provided plain_text using asymmetric and symmetric encryption
+
+        :param plain_text: The text to be encrypted
+        """
+
+        if self.publ_key is None:
+            raise ValueError("The public key cannot be None in encode, this error occurs because no public key was specified when initializing the AsymmetricCrypto function and none was generated with generate_keys.")
+
+        symmetric_key = secrets.token_bytes(64)
+
+        cipher_text = SymmetricEncryption(symmetric_key).encrypt(plain_text)
+
+        encrypted_symmetric_key = self.publ_key.encrypt(
+            symmetric_key,
+            asy_padding.OAEP(
+                mgf = asy_padding.MGF1(
+                    algorithm = hashes.SHA256()
+                ),
+                algorithm = hashes.SHA256(),
+                label = None
+            )
+        )
+
+        encrypted_key = b64encode(encrypted_symmetric_key).decode('utf-8')
+        return f"{encrypted_key}//{cipher_text}", b64encode(symmetric_key).decode('utf-8')
+
+    def decrypt(self, cipher_text: str) -> str:
+        """
+        Decrypt the provided cipher_text using asymmetric and symmetric decryption
+
+        :param cipher_text: The encrypted message with the encrypted symmetric key
+        """
+
+        if self.priv_key is None:
+            raise ValueError("The private key cannot be None in decode, this error occurs because no private key was specified when initializing the AsymmetricCrypto function and none was generated with generate_keys.")
+
+        encrypted_key, cipher_text = cipher_text.split("//")[0], cipher_text.split("//")[1]
+        encrypted_symmetric_key = b64decode(encrypted_key.encode('utf-8'))
+
+        symmetric_key = self.priv_key.decrypt(
+            encrypted_symmetric_key, 
+            asy_padding.OAEP(
+                mgf = asy_padding.MGF1(
+                    algorithm=hashes.SHA256()
+                ),
+                algorithm = hashes.SHA256(),
+                label = None
+            )
+        )
+
+        plain_text = SymmetricEncryption(symmetric_key).decrypt(cipher_text)
+
+        return plain_text
+
+    def sign(self, plain_text: Union[str, bytes]) -> str:
+        """
+        Sign the provided plain_text using the private key
+
+        :param plain_text: The text to be signed
+        """
+
+        if self.priv_key is None:
+            raise ValueError("The private key cannot be None in sign, this error occurs because no private key was specified when initializing the AsymmetricCrypto function and none was generated with generate_keys.")
+
+        if isinstance(plain_text, str):
+            plain_text = plain_text.encode()
+
+        signature = self.priv_key.sign(
+            plain_text,
+            asy_padding.PSS(
+                mgf = asy_padding.MGF1(
+                    hashes.SHA256()
+                ),
+                salt_length = asy_padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+        return b64encode(signature).decode('utf-8')
+
+    def verify_sign(self, signature: str, plain_text: Union[str, bytes]) -> bool:
+        """
+        Verify the signature of the provided plain_text using the public key
+
+        :param sign_text: The signature of the plain_text with base64 encoding
+        :param plain_text: The text whose signature needs to be verified
+        """
+
+        if self.publ_key is None:
+            raise ValueError("The public key cannot be None in verify_sign, this error occurs because no public key was specified when initializing the AsymmetricCrypto function and none was generated with generate_keys.")
+
+        if isinstance(plain_text, str):
+            plain_text = plain_text.encode()
+
+        signature = b64decode(signature)
+
+        try:
+            self.publ_key.verify(
+                signature,
+                plain_text,
+                asy_padding.PSS(
+                    mgf = asy_padding.MGF1(
+                        hashes.SHA256()
+                    ),
+                    salt_length = asy_padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+
+            return True
+        except:
+            return False
+

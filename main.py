@@ -10,16 +10,60 @@ import subprocess
 import tarfile
 import json
 import time
+import atexit
 import sys
+from sys import argv as ARGUMENTS
+import logging
 from rich.console import Console
+from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
-                  Tor, Bridge, Linux, SecureDelete
-from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES
+                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption
+from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
+    sys.exit(1)
+
+if "-v" in ARGUMENTS or "--version" in ARGUMENTS:
+    print("CipherChat Version:", VERSION, "\n")
+    sys.exit(0)
+
+if "-a" in ARGUMENTS or "--about" in ARGUMENTS:
+    clear_console()
+    print(f"Current version: {VERSION}")
+    print("CipherChat is used for secure chatting with end to end encryption and anonymous use of the Tor network for sending / receiving messages, it is released under the GPL v3 on Github. Setting up and using secure chat servers is made easy.")
+    print("Use `python cipherchat.py -h` if you want to know all commands. To start use `python cipherchat.py`.")
     sys.exit(0)
 
 CONSOLE = Console()
+
+if "-k" in ARGUMENTS or "--killswitch" in ARGUMENTS:
+    clear_console()
+    start_time = time.time()
+
+    with CONSOLE.status("[bold green]All files will be overwritten and deleted several times... (This can take several minutes)"):
+        if os.path.isdir(DATA_DIR_PATH):
+            SecureDelete.directory(DATA_DIR_PATH)
+
+    end_time = time.time()
+
+    CONSOLE.log("[green]Completed, all files are irrevocably deleted.","(took", end_time - start_time, "s)")
+    time.sleep(5)
+
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print("Good Bye. 💩")
+
+    sys.exit(0)
+
+
+if "-h" in ARGUMENTS or "--help" in ARGUMENTS:
+    clear_console()
+    print("> To start the client, simply do not use any arguments.")
+    print("-h, --help                  Displays this help menu.")
+    print("-a, --about                 Displays an About Cipherchat overview")
+    print("-k, --killswitch            Immediately deletes all data in the data Dir and thus all persistent user data")
+    print("-t, --torhiddenservice      Launches a CipherChat Tor Hidden Service")
+    exit(0)
+
 SYSTEM, MACHINE = get_system_architecture()
 
 clear_console()
@@ -103,6 +147,93 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
         SecureDelete.directory(TEMP_DIR_PATH)
     CONSOLE.print("[green]~ Cleaning up... Done")
 
+if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
+    clear_console()
+
+    control_port, socks_port = Tor.get_ports(True)
+    configuration = Tor.get_hidden_service_config()
+
+    control_port = configuration.get("control_port", control_port)
+    control_password = configuration.get("control_password")
+    socks_port = configuration.get("socks_port", socks_port)
+    hidden_service_dir = configuration["hidden_service_directory"]
+    webservice_host, webservice_port = configuration["webservice_host"], configuration["webservice_port"]
+    without_ui = configuration["without_ui"]
+
+    with CONSOLE.status("[green]Starting Tor Executable..."):
+        tor_process, control_password = Tor.launch_tor_with_config(
+            control_port, socks_port, [], True, control_password,
+            {
+                f"HiddenServiceDir {hidden_service_dir}",
+                f"HiddenServicePort 80 {webservice_host}:{webservice_port}"
+            }
+        )
+
+    def atexit_terminate_tor():
+        "Executes on exit so that Tor is shut down correctly"
+
+        with CONSOLE.status("[green]Terminating Tor..."):
+            Tor.send_shutdown_signal(control_port, control_password)
+            time.sleep(1)
+            tor_process.terminate()
+
+    atexit.register(atexit_terminate_tor)
+
+    hostname_path = os.path.join(hidden_service_dir, "hostname")
+
+    try:
+        with open(hostname_path, "r", encoding = "utf-8") as readable_file:
+            HOSTNAME = readable_file.read()
+    except:
+        HOSTNAME = "???"
+
+    ASYMMETRIC_ENCRYPTION = AsymmetricEncryption().generate_keys()
+    PUBLIC_KEY, PRIVATE_KEY = ASYMMETRIC_ENCRYPTION.public_key, ASYMMETRIC_ENCRYPTION.private_key
+
+    app = Flask("CipherChat")
+
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.WARNING)
+
+    @app.route("/ping")
+    def ping():
+        "Used to check whether the server is online and which version it has"
+
+        return "Pong! CipherChat Chat Service " + str(VERSION)
+
+    @app.route("/")
+    def index():
+        "Displays a user interface to the user when activated"
+
+        if without_ui:
+            return abort(404)
+
+        return abort(404) #WebPage.render_template(os.path.join(TEMPLATES_DIR_PATH, "index.html"))
+
+    @app.route("/safe_usage.txt")
+    def safe_usage():
+        return abort(404)
+        SAFE_USAGE_PATH = os.path.join(TEMPLATES_DIR_PATH, "safe_usage.txt")
+        if not os.path.isfile(SAFE_USAGE_PATH):
+            return "No safe_usage.txt provided."
+        with open(SAFE_USAGE_PATH, "r") as readable_file:
+            safe_usage = readable_file.read()
+
+        new_safe_usage = ""
+        for line in safe_usage.split("\n"):
+            if not line.strip().startswith("#"):
+                new_safe_usage += line + "\n"
+
+        return render_template_string("<pre>{{ safe_usage }}</pre>", safe_usage=new_safe_usage)
+
+    @app.route("/api/public_key")
+    def api_public_key():
+        return abort(404)
+        return PUBLIC_KEY
+    
+    atexit_terminate_tor()
+    sys.exit(0)
+
 BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")
 bridge_type, use_default_bridge = None, None
 
@@ -183,7 +314,7 @@ if not use_default_bridge:
         bridges = Bridge.choose_buildin(bridge_type)
 
         with CONSOLE.status("[green]Starting Tor Executable..."):
-            control_password, tor_process = Tor.launch_tor_with_config(8030, 8031, bridges)
+            tor_process, control_password = Tor.launch_tor_with_config(8030, 8031, bridges)
 
         if not os.path.isdir(TEMP_DIR_PATH):
             os.mkdir(TEMP_DIR_PATH)
