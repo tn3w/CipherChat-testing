@@ -1,36 +1,37 @@
-# ~~~
-# This is a copy of the free chat program "CipherChat" under GPL-3.0 license
-# GitHub: https://github.com/tn3w/CipherChat
-# ~~~
-
-from sys import exit
-
-if __name__ == "__main__":
-    print("Use `python main.py`")
-    exit(1)
+""" 
+~-~-~-~
+This is a copy of the free chat program "CipherChat" under GPL-3.0 license
+GitHub: https://github.com/tn3w/CipherChat
+~-~-~-~
+"""
 
 import os
 from typing import Tuple, Optional
 import platform
 import secrets
-import requests
 import random
 import shutil
 import subprocess
 import concurrent.futures
 import multiprocessing
-from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS, DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES
+from urllib.parse import urlparse
+import time
+import socket
+import json
+import requests
 from bs4 import BeautifulSoup
 from rich.progress import Progress
 from rich.console import Console
 import distro
-from urllib.parse import urlparse
 from stem.control import Controller
 from stem import Signal
-import time
 import psutil
-import socket
-import json
+from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
+                 DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES
+
+if __name__ == "__main__":
+    print("Use `python main.py`")
+    exit(0)
 
 LOGO = '''
  dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
