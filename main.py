@@ -165,8 +165,8 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
         tor_process, control_password = Tor.launch_tor_with_config(
             control_port, socks_port, [], True, control_password,
             {
-                f"HiddenServicePort 80 {webservice_host}:{webservice_port}",
-                f"HiddenServiceDir {hidden_service_dir}"
+                "hidden_service_dir": hidden_service_dir,
+                "hidden_service_port": f"80 {webservice_host}:{webservice_port}"
             }
         )
 
@@ -188,7 +188,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     except:
         HOSTNAME = "???"
     
-    CONSOLE.print(f"[bright_blue]TOR Hidden Service:", HOSTNAME)
+    CONSOLE.print("[bright_blue]TOR Hidden Service:", HOSTNAME)
 
     ASYMMETRIC_ENCRYPTION = AsymmetricEncryption().generate_keys()
     PUBLIC_KEY, PRIVATE_KEY = ASYMMETRIC_ENCRYPTION.public_key, ASYMMETRIC_ENCRYPTION.private_key
@@ -233,10 +233,9 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     def api_public_key():
         return abort(404)
         return PUBLIC_KEY
-    
+
     app.run(host = webservice_host, port = webservice_port)
 
-    atexit_terminate_tor()
     sys.exit(0)
 
 BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")

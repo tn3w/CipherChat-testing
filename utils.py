@@ -598,7 +598,7 @@ class Tor:
     @staticmethod
     def launch_tor_with_config(control_port: int, socks_port: int, bridges: list,
                                is_service: bool = False, control_password: Optional[str] = None,
-                               other_configuration: Optional[list] = None
+                               other_configuration: Optional[dict] = None
                                ) -> Tuple[subprocess.Popen, str]:
         """
         Starts Tor with the given configurations and bridges
@@ -637,10 +637,12 @@ class Tor:
                 temp_config.write(f"UseBridges 1\nClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\nClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\nClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\nClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}")
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
-
+            
             if not other_configuration is None:
-                for configuration in other_configuration:
-                    temp_config.write(f"{configuration}\n")
+                if not other_configuration.get("hidden_service_dir") is None:
+                    temp_config.write(f"HiddenServiceDir {other_configuration.get('hidden_service_dir')}\n")
+                if not other_configuration.get("hidden_service_port") is None:
+                    temp_config.write(f"HiddenServicePort {other_configuration.get('hidden_service_port')}\n")
 
         tor_process = subprocess.Popen(
             [TOR_EXECUTABLE_PATH, "-f", temp_config_path],
