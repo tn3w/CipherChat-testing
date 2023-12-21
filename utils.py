@@ -760,7 +760,7 @@ class Tor:
                     return s.connect_ex(('127.0.0.1', port)) == 0
             except:
                 return False
-            
+
         def find_avaiable_port(without_port = None):
             while True:
                 random_port = secrets.randbelow(random_range) + 1000
@@ -768,14 +768,14 @@ class Tor:
                     continue
                 if not is_port_in_use(random_port):
                     return random_port
-        
+
         if is_port_in_use(control_port):
             control_port = find_avaiable_port(socks_port)
         if is_port_in_use(socks_port):
             socks_port = find_avaiable_port(control_port)
-        
+
         return control_port, socks_port
-    
+
     @staticmethod
     def get_hidden_service_config() -> dict:
         "Loads the hidden service configuration"
@@ -1168,4 +1168,3 @@ class AsymmetricEncryption:
             return True
         except:
             return False
-
