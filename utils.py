@@ -681,7 +681,7 @@ class Tor:
                         raise TimeoutError("Timeout!")
                     time.sleep(1)
 
-        #os.remove(temp_config_path)
+        os.remove(temp_config_path)
 
         return tor_process, control_password
 
