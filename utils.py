@@ -44,7 +44,7 @@ if __name__ == "__main__":
     print("Use `python main.py`")
     sys.exit(0)
 
-LOGO = '''
+LOGO_SMALL = '''
  dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
 dP   `" 88 88__dP 88  88 88__   88__dP dP   `" 88  88   dPYb     88   
 Yb      88 88"""  888888 88""   88"Yb  Yb      888888  dP__Yb    88   
@@ -53,11 +53,40 @@ Yb      88 88"""  888888 88""   88"Yb  Yb      888888  dP__Yb    88
 -~-    Programmed by TN3W - https://github.com/tn3w/CipherChat    -~-
 '''
 
+LOGO_BIG = '''
+             @@@@@            
+       @@@@@@@@@@@@@@@@@      
+    @@@@@@@@@@@@@@@   @@@@@   
+  @@@@@@@@@@@@@@ @@@@@@  @@@@ 
+ @@@@@@@@@@@@@@@@@@  @@@@  @@@   dP""b8 88 88""Yb 88  88 888888 88""Yb  dP""b8 88  88    db    888888 
+ @@@@@@@@@@@@@@@ @@@@  @@@ @@@  dP   `" 88 88__dP 88  88 88__   88__dP dP   `" 88  88   dPYb     88   
+@@@@@@@@@@@@@@@@   @@  @@@  @@@ Yb      88 88"""  888888 88""   88"Yb  Yb      888888  dP__Yb    88   
+ @@@@@@@@@@@@@@@ @@@@  @@@ @@@   YboodP 88 88     88  88 888888 88  Yb  YboodP 88  88 dP""""Yb   88  
+ @@@@@@@@@@@@@@@@@@  @@@@ @@@@  -~-    Programmed by TN3W - https://github.com/tn3w/CipherChat    -~-
+  @@@@@@@@@@@@@@@@@@@@@  @@@  
+    @@@@@@@@@@@@@@@   @@@@@   
+       @@@@@@@@@@@@@@@@@      
+'''
+
+def get_console_columns():
+    "Returns the console columns"
+
+    if os.name == 'nt':
+        _, columns = shutil.get_terminal_size()
+        return columns
+    else:
+        _, columns = os.popen('stty size', 'r').read().split()
+        return int(columns)
+
 def clear_console():
     "Cleans the console and shows logo"
 
     os.system('cls' if os.name == 'nt' else 'clear')
-    print(LOGO)
+
+    if get_console_columns() > 104:
+        print(LOGO_BIG)
+    else:
+        print(LOGO_SMALL)
 
 def get_system_architecture() -> Tuple[str, str]:
     "Function to get the correct system information"
