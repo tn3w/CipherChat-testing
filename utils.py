@@ -19,6 +19,7 @@ import time
 import socket
 import json
 import sys
+import re
 import hashlib
 from base64 import urlsafe_b64encode, urlsafe_b64decode, b64encode, b64decode
 import requests
@@ -34,8 +35,10 @@ from cryptography.hazmat.primitives import hashes, serialization, padding as sym
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding as asy_padding
+from jinja2 import Environment, select_autoescape, Undefined
 from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
-                 DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES
+                 DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES,\
+                 CURRENT_DIR_PATH
 
 if __name__ == "__main__":
     print("Use `python main.py`")
@@ -1168,3 +1171,80 @@ class AsymmetricEncryption:
             return True
         except:
             return False
+
+class SilentUndefined(Undefined):
+    "Class to not get an error when specifying a non-existent argument"
+
+    def _fail_with_undefined_error(self, *args, **kwargs):
+        return None
+
+class WebPage:
+    "Class with useful tools for WebPages"
+
+    @staticmethod
+    def _minimize_tag_content(html: str, tag: str) -> str:
+        """
+        Minimizes the content of a given tag
+        
+        :param html: The HTML page where the tag should be minimized
+        :param tag: The HTML tag e.g. "script" or "style"
+        """
+
+        tag_pattern = rf'<{tag}\b[^>]*>(.*?)<\/{tag}>'
+
+        def minimize_tag_content(match: re.Match):
+            content = match.group(1)
+            content = re.sub(r'\s+', ' ', content)
+            return f'<{tag}>{content}</{tag}>'
+
+        return re.sub(tag_pattern, minimize_tag_content, html, flags=re.DOTALL | re.IGNORECASE)
+
+    @staticmethod
+    def minimize(html: str) -> str:
+        """
+        Minimizes an HTML page
+
+        :param html: The content of the page as html
+        """
+
+        html = re.sub(r'<!--(.*?)-->', '', html, flags=re.DOTALL)
+        html = re.sub(r'\s+', ' ', html)
+
+        html = WebPage._minimize_tag_content(html, 'script')
+        html = WebPage._minimize_tag_content(html, 'style')
+        return html
+
+    @staticmethod
+    def render_template(file_name: Optional[str] = None, html: Optional[str] = None, **args) -> str:
+        """
+        Function to render a HTML template (= insert arguments / translation / minimization)
+
+        :param file_name: From which file HTML code should be loaded (Optional)
+        :param html: The content of the page as html (Optional)
+        :param args: Arguments to be inserted into the WebPage with Jinja2
+        """
+
+        if file_name is None and html is None:
+            raise ValueError("Arguments 'file_path' and 'html' are None")
+        
+        file_path = os.path.join(CURRENT_DIR_PATH, "templates", file_name)
+
+        if not file_path is None:
+            if not os.path.isfile(file_path):
+                raise FileNotFoundError(f"File `{file_path}` does not exist")
+
+        env = Environment(
+            autoescape=select_autoescape(['html', 'xml']),
+            undefined=SilentUndefined
+        )
+
+        if html is None:
+            with open(file_path, "r", encoding="utf-8") as file:
+                html = file.read()
+
+        template = env.from_string(html)
+
+        html = template.render(**args)
+        html = WebPage.minimize(html)
+
+        return html

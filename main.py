@@ -14,10 +14,11 @@ import atexit
 import sys
 from sys import argv as ARGUMENTS
 import logging
+from typing import Optional
 from rich.console import Console
 from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
-                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption
+                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
@@ -211,27 +212,23 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
         if without_ui:
             return abort(404)
 
-        return abort(404) #WebPage.render_template(os.path.join(TEMPLATES_DIR_PATH, "index.html"))
+        return WebPage.render_template("index.html")
+    
+    @app.route("/setup")
+    @app.route("/setup/")
+    @app.route("/setup/<operating_system>")
+    def setup(operating_system: Optional[str] = None):
+        "Shows the user an interface for installing CipherChat."
 
-    @app.route("/safe_usage.txt")
-    def safe_usage():
-        return abort(404)
-        SAFE_USAGE_PATH = os.path.join(TEMPLATES_DIR_PATH, "safe_usage.txt")
-        if not os.path.isfile(SAFE_USAGE_PATH):
-            return "No safe_usage.txt provided."
-        with open(SAFE_USAGE_PATH, "r") as readable_file:
-            safe_usage = readable_file.read()
+        if without_ui:
+            return abort(404)
 
-        new_safe_usage = ""
-        for line in safe_usage.split("\n"):
-            if not line.strip().startswith("#"):
-                new_safe_usage += line + "\n"
-
-        return render_template_string("<pre>{{ safe_usage }}</pre>", safe_usage=new_safe_usage)
-
+        return WebPage.render_template("setup.html", None, os = operating_system, hidden_service_hostname = HOSTNAME)
+    
     @app.route("/api/public_key")
     def api_public_key():
-        return abort(404)
+        "Returns the public key for encrypted communication with the server"
+
         return PUBLIC_KEY
 
     app.run(host = webservice_host, port = webservice_port)
