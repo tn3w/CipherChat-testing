@@ -308,15 +308,15 @@
             <div class="step">1. Choose your OS:</div>
             {% if not os is defined %}
             <div class="os-buttons">
-                <a class="button" href="/windows" onclick="showOperatingSystem('windows'); return false;">Windows</a>
-                <a class="button" href="/windows" onclick="showOperatingSystem('macOS'); return false;">macOS</a>
-                <a class="button" href="/windows" onclick="showOperatingSystem('linux'); return false;">Linux</a>
+                <a class="button" href="/setup/windows" onclick="showOperatingSystem('windows'); return false;">Windows</a>
+                <a class="button" href="/setup/macOS" onclick="showOperatingSystem('macOS'); return false;">macOS</a>
+                <a class="button" href="/setup/linux" onclick="showOperatingSystem('linux'); return false;">Linux</a>
             </div>
             {% else %}
             <div class="os-buttons">
-                <a class="button" href="/windows">Windows</a>
-                <a class="button" href="/windows">macOS</a>
-                <a class="button" href="/windows">Linux</a>
+                <a class="button" href="/setup/windows">Windows</a>
+                <a class="button" href="/setup/macOS">macOS</a>
+                <a class="button" href="/setup/linux">Linux</a>
             </div>
             {% endif %}
             
