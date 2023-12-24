@@ -15,10 +15,11 @@ import sys
 from sys import argv as ARGUMENTS
 import logging
 from typing import Optional
+from getpass import getpass
 from rich.console import Console
 from flask import Flask, abort
-from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
-                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage
+from utils import clear_console, get_system_architecture, download_file, get_gnupg_path, get_password_strength,\
+                  is_password_safe, Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
@@ -238,6 +239,58 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     app.run(host = webservice_host, port = webservice_port)
 
     sys.exit(0)
+
+
+clear_console()
+CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+input_use_persistant_storage = input("Would you like to use Persistent Storage with password protection? [y - yes or n - no] ")
+use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
+
+if use_persistant_storage:
+    persistent_storage_password = None
+    while persistent_storage_password is None:
+        clear_console()
+        CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+        print("Would you like to use Persistent Storage with password protection? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
+
+        input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
+
+        if input_persistent_storage_password == "":
+            CONSOLE.print("[red][Critical Error] No password was entered.")
+            input("Enter: ")
+            continue
+        
+        with CONSOLE.status("[green]Calculating the password strength..."):
+            password_strength = get_password_strength(input_persistent_storage_password)
+            password_strength_color = "green" if password_strength > 95 else "yellow" if password_strength > 80 else "red"
+        CONSOLE.print(f"[{password_strength_color}]Password Strength: {password_strength}% / 100%")
+
+        if password_strength < 80:
+            CONSOLE.print("[red][Error] Your password is not secure enough.")
+            input_continue = input("Still use it? [y - yes or n - no] ")
+
+            if not input_continue.lower().startswith("y"):
+                continue
+        
+        with CONSOLE.status("[green]Checking your password for data leaks..."):
+            is_password_pwned = not is_password_safe(input_persistent_storage_password)
+
+        if is_password_pwned:
+            CONSOLE.print("[red][Error] Your password is included in data leaks.")
+            input_continue = input("Still use it? [y - yes or n - no] ")
+
+            if not input_continue.lower().startswith("y"):
+                continue
+        
+        input_persistent_storage_password_check = getpass("\nPlease enter your password again: ")
+
+        if not input_persistent_storage_password == input_persistent_storage_password_check:
+            CONSOLE.print("[red][Critical Error] The passwords do not match.")
+            input("Enter: ")
+            continue
+
+        persistent_storage_password = input_persistent_storage_password
+
 
 BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")
 bridge_type, use_default_bridge = None, None

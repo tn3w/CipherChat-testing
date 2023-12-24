@@ -204,6 +204,57 @@ def get_gnupg_path() -> str:
 
     return gnupg_path
 
+def get_password_strength(password: str) -> int:
+    """
+    Function to get a password strength from 0 (bad) to 100% (good)
+
+    :param password: The password to check
+    """
+
+    strength = (len(password) * 62.5) / 16
+
+    if strength > 70:
+        strength = 70
+
+    if re.search(r'[A-Z]', password):
+        strength += 5
+    if re.search(r'[a-z]', password):
+        strength += 5
+    if re.search(r'[!@#$%^&*()_+{}\[\]:;<>,.?~\\]', password):
+        strength += 20
+
+    if strength > 100:
+        strength = 100
+    return round(strength)
+
+def is_password_safe(password: str) -> bool:
+    """
+    Ask pwnedpasswords.com if password is available in data leak
+
+    :param password: Password to check against
+    """
+
+    password_sha1_hash = hashlib.sha1(password.encode()).hexdigest()
+    hash_prefix = password_sha1_hash[:5]
+
+    try:
+        url = f"https://api.pwnedpasswords.com/range/{hash_prefix}"
+
+        response = requests.get(url, headers = {'User-Agent': random.choice(USER_AGENTS)}, timeout = 5)
+
+        if response.status_code == 200:
+            response_content = response.text
+
+            for sha1_hash in response_content.split("\n"):
+                sha1_hash = sha1_hash.split(":")[0]
+                if sha1_hash == password_sha1_hash:
+                    return False
+    except requests.RequestException:
+        pass  # FIXME: Error Handling
+
+    return True
+
+
 SYSTEM, MACHINE = get_system_architecture()
 CONSOLE = Console()
 CPU_COUNT = multiprocessing.cpu_count()
