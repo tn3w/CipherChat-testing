@@ -150,17 +150,20 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
 
 if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     clear_console()
+    CONSOLE.print("[bold yellow]~~~ Starting Tor Hidden Service ~~~")
 
-    control_port, socks_port = Tor.get_ports(True)
-    configuration = Tor.get_hidden_service_config()
+    with CONSOLE.status("[green]Getting Tor Configuration..."):
+        control_port, socks_port = Tor.get_ports(True)
+        configuration = Tor.get_hidden_service_config()
 
-    control_port = configuration.get("control_port", control_port)
-    control_password = configuration.get("control_password")
-    socks_port = configuration.get("socks_port", socks_port)
-    hidden_service_dir = configuration["hidden_service_directory"]
-    webservice_host, webservice_port = configuration["webservice_host"], configuration["webservice_port"]
-    webservice_host = webservice_host.replace("localhost", "127.0.0.1")
-    without_ui = configuration["without_ui"]
+        control_port = configuration.get("control_port", control_port)
+        control_password = configuration.get("control_password")
+        socks_port = configuration.get("socks_port", socks_port)
+        hidden_service_dir = configuration["hidden_service_directory"]
+        webservice_host, webservice_port = configuration["webservice_host"], configuration["webservice_port"]
+        webservice_host = webservice_host.replace("localhost", "127.0.0.1")
+        without_ui = configuration["without_ui"]
+    CONSOLE.print("[green]~ Getting Tor Configuration... Done")
 
     with CONSOLE.status("[green]Starting Tor Executable..."):
         tor_process, control_password = Tor.launch_tor_with_config(
@@ -170,6 +173,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
                 "hidden_service_port": f"80 {webservice_host}:{webservice_port}"
             }
         )
+    CONSOLE.print("[green]~ Starting Tor Executable.. Done")
 
     def atexit_terminate_tor():
         "Executes on exit so that Tor is shut down correctly"
@@ -189,7 +193,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     except:
         HOSTNAME = "???"
     
-    CONSOLE.print("[bright_blue]TOR Hidden Service:", HOSTNAME)
+    CONSOLE.print("\n[bright_blue]TOR Hidden Service:", HOSTNAME)
 
     ASYMMETRIC_ENCRYPTION = AsymmetricEncryption().generate_keys()
     PUBLIC_KEY, PRIVATE_KEY = ASYMMETRIC_ENCRYPTION.public_key, ASYMMETRIC_ENCRYPTION.private_key
@@ -213,7 +217,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
             return abort(404)
 
         return WebPage.render_template("index.html")
-    
+
     @app.route("/setup")
     @app.route("/setup/")
     @app.route("/setup/<operating_system>")
@@ -224,7 +228,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
             return abort(404)
 
         return WebPage.render_template("setup.html", None, os = operating_system, hidden_service_hostname = HOSTNAME)
-    
+
     @app.route("/api/public_key")
     def api_public_key():
         "Returns the public key for encrypted communication with the server"
@@ -266,7 +270,7 @@ if bridge_type is None:
                 print(f"[>] {option}")
             else:
                 print(f"[ ] {option}")
-        
+
         key = input("\nChoose bridge type (c to confirm): ")
 
         if not key.lower() in ["c", "confirm"]:
@@ -277,7 +281,7 @@ if bridge_type is None:
         else:
             bridge_type = bridge_types[selected_option].replace(" (only buildin)", "").replace("Random selection", "random")
             break
-    
+
     if bridge_type in ["snowflake", "meek_lite"]:
         use_default_bridge = True
 

@@ -1049,14 +1049,14 @@ class AsymmetricEncryption:
 
         if not public_key is None:
             self.publ_key = serialization.load_der_public_key(
-                public_key.encode('latin-1'), backend=default_backend()
+                b64decode(public_key.encode("utf-8")), backend=default_backend()
             )
         else:
             self.publ_key = None
 
         if not private_key is None:
             self.priv_key = serialization.load_der_private_key(
-                private_key.encode('latin-1'), password=None, backend=default_backend()
+                b64decode(private_key.encode("utf-8")), password=None, backend=default_backend()
             )
         else:
             self.priv_key = None
@@ -1072,17 +1072,17 @@ class AsymmetricEncryption:
             key_size=key_size,
             backend=default_backend()
         )
-        self.private_key = self.priv_key.private_bytes(
+        self.private_key = b64encode(self.priv_key.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
-        ).decode('latin-1')
+        )).decode("utf-8")
 
         self.publ_key = self.priv_key.public_key()
-        self.public_key = self.publ_key.public_bytes(
+        self.public_key = b64encode(self.publ_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
-        ).decode('latin-1')
+        )).decode("utf-8")
 
         return self
 
