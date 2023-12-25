@@ -707,13 +707,19 @@ class Tor:
 
         if session is None:
             session = Proxy.get_requests_session()
-
-        response = session.get(
-            "http://www.torproject.org/download/tor/",
-            headers={'User-Agent': random.choice(USER_AGENTS)},
-            timeout = 5
-        )
-        response.raise_for_status()
+        
+        while True:
+            try:
+                response = session.get(
+                    "http://www.torproject.org/download/tor/",
+                    headers={'User-Agent': random.choice(USER_AGENTS)},
+                    timeout = 5
+                )
+                response.raise_for_status()
+            except (requests.exceptions.ProxyError, requests.exceptions.ReadTimeout):
+                session = Proxy.get_requests_session()
+            else:
+                break
 
         soup = BeautifulSoup(response.text, 'html.parser')
 
