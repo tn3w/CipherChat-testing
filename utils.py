@@ -227,14 +227,14 @@ def get_password_strength(password: str) -> int:
         strength = 100
     return round(strength)
 
-def is_password_safe(password: str) -> bool:
+def is_password_pwned(password: str) -> bool:
     """
     Ask pwnedpasswords.com if password is available in data leak
 
     :param password: Password to check against
     """
 
-    password_sha1_hash = hashlib.sha1(password.encode()).hexdigest()
+    password_sha1_hash = hashlib.sha1(password.encode()).hexdigest().upper()
     hash_prefix = password_sha1_hash[:5]
 
     try:
@@ -243,11 +243,10 @@ def is_password_safe(password: str) -> bool:
         response = requests.get(url, headers = {'User-Agent': random.choice(USER_AGENTS)}, timeout = 5)
 
         if response.status_code == 200:
-            response_content = response.text
 
-            for sha1_hash in response_content.split("\n"):
-                sha1_hash = sha1_hash.split(":")[0]
-                if sha1_hash == password_sha1_hash:
+            hashes = [line.split(':') for line in response.text.splitlines()]
+            for hash, _ in hashes:
+                if hash == password_sha1_hash[5:]:
                     return False
     except requests.RequestException:
         pass  # FIXME: Error Handling

@@ -18,8 +18,9 @@ from typing import Optional
 from getpass import getpass
 from rich.console import Console
 from flask import Flask, abort
-from utils import clear_console, get_system_architecture, download_file, get_gnupg_path, get_password_strength,\
-                  is_password_safe, Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage
+from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
+                  get_password_strength, is_password_pwned, Tor, Bridge, Linux, SecureDelete,\
+                  AsymmetricEncryption, WebPage
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
@@ -256,32 +257,32 @@ if use_persistant_storage:
         input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
 
         if input_persistent_storage_password == "":
-            CONSOLE.print("[red][Critical Error] No password was entered.")
+            CONSOLE.print("\n[red][Critical Error] No password was entered.")
             input("Enter: ")
             continue
-        
+
         with CONSOLE.status("[green]Calculating the password strength..."):
             password_strength = get_password_strength(input_persistent_storage_password)
             password_strength_color = "green" if password_strength > 95 else "yellow" if password_strength > 80 else "red"
         CONSOLE.print(f"[{password_strength_color}]Password Strength: {password_strength}% / 100%")
 
         if password_strength < 80:
-            CONSOLE.print("[red][Error] Your password is not secure enough.")
+            CONSOLE.print("\n[red][Error] Your password is not secure enough.")
             input_continue = input("Still use it? [y - yes or n - no] ")
 
             if not input_continue.lower().startswith("y"):
                 continue
-        
+
         with CONSOLE.status("[green]Checking your password for data leaks..."):
-            is_password_pwned = not is_password_safe(input_persistent_storage_password)
+            is_password_safe = is_password_pwned(input_persistent_storage_password)
 
-        if is_password_pwned:
-            CONSOLE.print("[red][Error] Your password is included in data leaks.")
+        if not is_password_safe:
+            CONSOLE.print("\n[red][Error] Your password is included in data leaks.")
             input_continue = input("Still use it? [y - yes or n - no] ")
 
             if not input_continue.lower().startswith("y"):
                 continue
-        
+
         input_persistent_storage_password_check = getpass("\nPlease enter your password again: ")
 
         if not input_persistent_storage_password == input_persistent_storage_password_check:
