@@ -20,7 +20,7 @@ from rich.console import Console
 from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
                   get_password_strength, is_password_pwned, Tor, Bridge, Linux, SecureDelete,\
-                  AsymmetricEncryption, WebPage
+                  AsymmetricEncryption, WebPage, Hashing
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
@@ -241,14 +241,46 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
 
     sys.exit(0)
 
+PERSISTENT_STORAGE_CONF_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.conf")
+use_persistant_storage = None
+persistent_storage_password = None
 
-clear_console()
-CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
-input_use_persistant_storage = input("Would you like to use Persistent Storage with password protection? [y - yes or n - no] ")
-use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
+if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
+    try:
+        with open(PERSISTENT_STORAGE_CONF_PATH, "r", encoding = "utf-8") as readable_file:
+            persistent_storage_configuration = readable_file.read()
+
+        conf_use_persistent_storage, conf_password_hash = persistent_storage_configuration.split("--")
+        use_persistant_storage = {"true": True, "false": False}.get(conf_use_persistent_storage)
+
+        if len(conf_password_hash) == 154:
+            while persistent_storage_password is None:
+                clear_console()
+                CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+                input_persistent_storage_password = getpass("Please enter your Persistent Storage password: ")
+
+                if input_persistent_storage_password == "":
+                    CONSOLE.print("\n[red][Error] No password was entered.")
+                    input("Enter: ")
+                    continue
+
+                if not Hashing().compare(input_persistent_storage_password, conf_password_hash):
+                    print(input_persistent_storage_password, conf_password_hash)
+                    CONSOLE.print("\n[red][Error] The password entered is not the Persistent Storage password")
+                    input("Enter: ")
+                    continue
+
+                persistent_storage_password = input_persistent_storage_password
+    except:
+        pass
+
+if use_persistant_storage is None:
+    clear_console()
+    CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+    input_use_persistant_storage = input("Would you like to use Persistent Storage with password protection? [y - yes or n - no] ")
+    use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
 
 if use_persistant_storage:
-    persistent_storage_password = None
     while persistent_storage_password is None:
         clear_console()
         CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
@@ -292,6 +324,14 @@ if use_persistant_storage:
 
         persistent_storage_password = input_persistent_storage_password
 
+with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_file:
+    persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage)]
+    if persistent_storage_password is None:
+        persistent_storage_configuration.append("")
+    else:
+        persistent_storage_configuration.append(Hashing().hash(persistent_storage_password, 64))
+
+    writeable_file.write('--'.join(persistent_storage_configuration))
 
 BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")
 bridge_type, use_default_bridge = None, None
