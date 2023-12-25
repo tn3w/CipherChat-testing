@@ -604,6 +604,12 @@ class Bridge:
 
             if len(checked_bridges) >= len(all_bridges):
                 break
+        
+        while (len(selected_bridges) < 3 and len(all_bridges) > 1)\
+            or (len(selected_bridges) == 0 and len(all_bridges) == 1):
+            random_bridge = secrets.choice(all_bridges)
+            if not random_bridge in selected_bridges:
+                selected_bridges.append(random_bridge)
 
         return selected_bridges
 
