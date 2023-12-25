@@ -38,7 +38,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding as asy_paddin
 from jinja2 import Environment, select_autoescape, Undefined
 from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
                  DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES,\
-                 CURRENT_DIR_PATH
+                 CURRENT_DIR_PATH, HTTP_PROXIES, HTTPS_PROXIES
 
 if __name__ == "__main__":
     print("Use `python main.py`")
@@ -127,9 +127,68 @@ def generate_random_string(length: int, with_punctuation: bool = True,
     random_string = ''.join(secrets.choice(characters) for _ in range(length))
     return random_string
 
+class Proxy:
+    "Includes all functions that have something to do with proxies"
+
+    @staticmethod
+    def _select_random(proxys: list, quantity: int = 1) -> Union[list, str]:
+        """
+        Selects random proxys that are online
+        
+        :param quantity: How many proxys should be selected
+        """
+        
+        selected_proxies = []
+        checked_proxies = []
+
+        while len(selected_proxies) < quantity:
+            if len(proxys) <= len(checked_proxies):
+                break
+
+            random_proxy = secrets.choice(proxys)
+            while random_proxy in checked_proxies:
+                random_proxy = secrets.choice(proxys)
+
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(3)
+
+                ip, port = random_proxy.split(":")
+                sock.connect((ip, int(port)))
+            except:
+                pass
+            else:
+                selected_proxies.append(random_proxy)
+
+            checked_proxies.append(random_proxy)
+
+        while len(selected_proxies) < quantity:
+            random_proxy = secrets.choice(proxys)
+            if not random_proxy in selected_proxies:
+                selected_proxies.append(random_proxy)
+
+        if quantity == 1:
+            return selected_proxies[0]
+
+        return selected_proxies
+
+    @staticmethod
+    def get_requests_session() -> requests.Session:
+        "Returns a requests.session object with a selected proxy"
+
+        http_proxie = Proxy._select_random(HTTP_PROXIES)
+        https_proxie = Proxy._select_random(HTTPS_PROXIES)
+
+        session = requests.Session()
+        session.proxies = {
+            "http": http_proxie,
+            "https:": https_proxie
+        }
+        return session
+
 def download_file(url: str, dict_path: str,
                   operation_name: Optional[str] = None, file_name: Optional[str] = None,
-                  session: requests.Session = requests.Session()) -> Optional[str]:
+                  session: Optional[requests.Session] = None) -> Optional[str]:
     """
     Function to download a file
 
@@ -139,6 +198,9 @@ def download_file(url: str, dict_path: str,
     :param file_name: Sets the file name (Optional)
     :param session: a requests.Session (Optional)
     """
+
+    if session is None:
+        session = Proxy.get_requests_session()
 
     if file_name is None:
         parsed_url = urlparse(url)
@@ -639,11 +701,15 @@ class Tor:
     "All functions that have something to do with the Tor network"
 
     @staticmethod
-    def get_download_link() -> Tuple[Optional[str], Optional[str]]:
-        "Request https://www.torproject.org to get the latest download links"
+    def get_download_link(session: Optional[requests.Session] = None
+        ) -> Tuple[Optional[str], Optional[str]]:
+        "Request http://www.torproject.org to get the latest download links"
 
-        response = requests.get(
-            "https://www.torproject.org/download/tor/",
+        if session is None:
+            session = Proxy.get_requests_session()
+
+        response = session.get(
+            "http://www.torproject.org/download/tor/",
             headers={'User-Agent': random.choice(USER_AGENTS)},
             timeout = 5
         )
@@ -725,7 +791,7 @@ class Tor:
                 temp_config.write(f"UseBridges 1\nClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\nClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\nClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\nClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}")
             for bridge in bridges:
                 temp_config.write(f"Bridge {bridge}\n")
-            
+
             if not other_configuration is None:
                 if not other_configuration.get("hidden_service_dir") is None:
                     temp_config.write(f"HiddenServiceDir {other_configuration.get('hidden_service_dir')}\n")
