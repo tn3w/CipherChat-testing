@@ -727,7 +727,8 @@ class BridgeDB:
     "All functions that have something to do with requesting bridges from BridgeDB"
 
     @staticmethod
-    def get_captcha_challenge(bridge_type: str, session: Optional[requests.Session]) -> Tuple[Optional[bytes], Optional[str]]:
+    def get_captcha_challenge(bridge_type: str, session: Optional[requests.Session])\
+        -> Tuple[Optional[bytes], Optional[str]]:
         """
         Asks for a captcha from bridges.torproject.org to get bridges
         
@@ -737,6 +738,8 @@ class BridgeDB:
 
         if session is None:
             session = Proxy.get_requests_session()
+
+        captcha_image_bytes, captcha_challenge_value = None, None
 
         try:
             response = requests.get(
@@ -750,8 +753,6 @@ class BridgeDB:
             if response.status_code == 200:
                 html_content = response.text
                 soup = BeautifulSoup(html_content, 'html.parser')
-
-                captcha_image_bytes, captcha_challenge_value = None, None
 
                 captcha_image_object = soup.select_one('#bridgedb-captcha img')
                 if captcha_image_object:
@@ -767,14 +768,15 @@ class BridgeDB:
 
                     if captcha_challenge_field_object:
                         captcha_challenge_value = captcha_challenge_field_object.get('value')
-
-                return captcha_image_bytes, captcha_challenge_value
         except Exception as e:
             print(f"Error getting captcha challenge: {str(e)}")
 
+        return captcha_image_bytes, captcha_challenge_value
+
     @staticmethod
     def get_bridges(bridge_type: str, captcha_input: str,
-                    captcha_challenge_value: str, session: Optional[requests.Session]) -> Optional[list]:
+                    captcha_challenge_value: str, session: Optional[requests.Session])\
+                        -> Optional[list]:
         """
         Gets the bridges after the captcha has been solved by the user
         
@@ -786,6 +788,8 @@ class BridgeDB:
 
         if session is None:
             session = Proxy.get_requests_session()
+
+        bridges = None
 
         try:
             headers = {
@@ -808,16 +812,14 @@ class BridgeDB:
                 html_content = response.text
                 soup = BeautifulSoup(html_content, 'html.parser')
 
-                bridges = None
-
                 bridge_lines_object = soup.select_one('#bridgelines')
                 if bridge_lines_object:
                     bridge_lines = bridge_lines_object.get_text()
                     bridges = [bridge.strip() for bridge in bridge_lines.strip().split('\n')]
-
-                return bridges
         except Exception as e:
             print(f"Error getting bridges: {str(e)}")
+
+        return bridges
 
 
 HIDDEN_SERVICE_CONF_FILE = os.path.join(DATA_DIR_PATH, "hidden-service.conf")
