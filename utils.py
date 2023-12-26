@@ -85,10 +85,15 @@ def clear_console():
 
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    if get_console_columns() > 104:
+    console_columns = get_console_columns()
+
+    if console_columns > 104:
         print(LOGO_BIG)
-    else:
+    elif console_columns > 71:
         print(LOGO_SMALL)
+    else:
+        print('-~- CIPHERCHAT -~-\n')
+
 
 def get_system_architecture() -> Tuple[str, str]:
     "Function to get the correct system information"
@@ -710,7 +715,6 @@ class Bridge:
             or (len(selected_bridges) == 0 and len(all_bridges) == 1):
             random_bridge = secrets.choice(all_bridges)
             if not random_bridge in selected_bridges:
-                print("Choosen Bridge:", random_bridge)
                 selected_bridges.append(random_bridge)
 
         return selected_bridges
