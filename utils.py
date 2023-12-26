@@ -155,6 +155,47 @@ def show_image_in_console(image_bytes: bytes) -> None:
 
     print(ascii_img)
 
+def get_gnupg_path() -> str:
+    "Function to query the GnuPG path"
+
+    gnupg_path = {
+        "Windows": r"C:\\Program Files (x86)\\GNU\\GnuPG\\gpg.exe",
+        "macOS": "/usr/local/bin/gpg"
+    }.get(SYSTEM, "/usr/bin/gpg")
+
+    command = {"Windows": "where gpg"}.get(SYSTEM, "which gpg")
+
+    try:
+        result = subprocess.check_output(command, shell=True, text=True)
+        gnupg_path = result.strip()
+    except Exception as e:
+        CONSOLE.log(f"[red][Error] Error when requesting pgp: '{e}'")
+
+    return gnupg_path
+
+def get_password_strength(password: str) -> int:
+    """
+    Function to get a password strength from 0 (bad) to 100% (good)
+
+    :param password: The password to check
+    """
+
+    strength = (len(password) * 62.5) / 16
+
+    if strength > 70:
+        strength = 70
+
+    if re.search(r'[A-Z]', password):
+        strength += 5
+    if re.search(r'[a-z]', password):
+        strength += 5
+    if re.search(r'[!@#$%^&*()_+{}\[\]:;<>,.?~\\]', password):
+        strength += 20
+
+    if strength > 100:
+        strength = 100
+    return round(strength)
+
 class Proxy:
     "Includes all functions that have something to do with proxies"
 
@@ -276,70 +317,40 @@ def download_file(url: str, dict_path: str,
 
     return save_path
 
-def get_gnupg_path() -> str:
-    "Function to query the GnuPG path"
-
-    gnupg_path = {
-        "Windows": r"C:\\Program Files (x86)\\GNU\\GnuPG\\gpg.exe",
-        "macOS": "/usr/local/bin/gpg"
-    }.get(SYSTEM, "/usr/bin/gpg")
-
-    command = {"Windows": "where gpg"}.get(SYSTEM, "which gpg")
-
-    try:
-        result = subprocess.check_output(command, shell=True, text=True)
-        gnupg_path = result.strip()
-    except Exception as e:
-        CONSOLE.log(f"[red][Error] Error when requesting pgp: '{e}'")
-
-    return gnupg_path
-
-def get_password_strength(password: str) -> int:
-    """
-    Function to get a password strength from 0 (bad) to 100% (good)
-
-    :param password: The password to check
-    """
-
-    strength = (len(password) * 62.5) / 16
-
-    if strength > 70:
-        strength = 70
-
-    if re.search(r'[A-Z]', password):
-        strength += 5
-    if re.search(r'[a-z]', password):
-        strength += 5
-    if re.search(r'[!@#$%^&*()_+{}\[\]:;<>,.?~\\]', password):
-        strength += 20
-
-    if strength > 100:
-        strength = 100
-    return round(strength)
-
-def is_password_pwned(password: str) -> bool:
+def is_password_pwned(password: str, session = Optional[requests.Session]) -> bool:
     """
     Ask pwnedpasswords.com if password is available in data leak
 
     :param password: Password to check against
+    :param session: a requests.Session Object (Optional)
     """
+
+    if session is None:
+        session = Proxy.get_requests_session()
 
     password_sha1_hash = hashlib.sha1(password.encode()).hexdigest().upper()
     hash_prefix = password_sha1_hash[:5]
 
-    try:
-        url = f"https://api.pwnedpasswords.com/range/{hash_prefix}"
+    url = f"https://api.pwnedpasswords.com/range/{hash_prefix}"
 
-        response = requests.get(url, headers = {'User-Agent': random.choice(USER_AGENTS)}, timeout = 5)
+    while True:
+        try:
+            response = requests.get(
+                url,
+                headers = {'User-Agent': random.choice(USER_AGENTS)},
+                timeout = 5
+            )
+            response.raise_for_status()
 
-        if response.status_code == 200:
-
-            hashes = [line.split(':') for line in response.text.splitlines()]
-            for hash, _ in hashes:
-                if hash == password_sha1_hash[5:]:
-                    return False
-    except requests.RequestException:
-        pass  # FIXME: Error Handling
+            if response.status_code == 200:
+                hashes = [line.split(':') for line in response.text.splitlines()]
+                for hash, _ in hashes:
+                    if hash == password_sha1_hash[5:]:
+                        return False         
+        except (requests.exceptions.ProxyError, requests.exceptions.ReadTimeout):
+            session = Proxy.get_requests_session()
+        else:
+            break
 
     return True
 
