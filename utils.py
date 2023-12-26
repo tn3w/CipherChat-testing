@@ -687,17 +687,14 @@ class Bridge:
                     bridge_port = processed_bridge.split(":")[1].split(" ")[0]
 
                     if Bridge._is_socket_bridge_online(bridge_address, int(bridge_port)):
-                        print("Choosen Bridge:", random_bridge)
                         selected_bridges.append(random_bridge)
                         found_bridge = True
                 elif random_type == "webtunnel":
                     bridge_url = random_bridge.split("url=")[1].split(" ")[0]
                     if Bridge._is_webtunnel_bridge_online(bridge_url):
-                        print("Choosen Bridge:", random_bridge)
                         selected_bridges.append(random_bridge)
                         found_bridge = True
                 else:
-                    print("Choosen Bridge:", random_bridge)
                     selected_bridges.append(random_bridge)
                     found_bridge = True                
 
