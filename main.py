@@ -423,6 +423,11 @@ except Exception as e:
 clear_console()
 
 bridges = None
+BRIDGE_FILES = [
+    os.path.join(DATA_DIR_PATH, "obfs4.json"),
+    os.path.join(DATA_DIR_PATH, "vanilla.json"),
+    os.path.join(DATA_DIR_PATH, "webtunnel.json")
+]
 
 if not use_default_bridge:
     is_file_missing = False
@@ -455,32 +460,78 @@ if not use_default_bridge:
             if not use_bridge_db:
                 Bridge.download(bridge_type, session)
             else:
-                with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
-                    captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
-                print("-" * 20)
-                show_image_in_console(captcha_image_bytes)
-                captcha_input = input("Enter the characters from the captcha: ")
-                bridges = BridgeDB.get_bridges(bridge_type, captcha_input, captcha_challenge_value, session)
+                while True:
+                    with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
+                        captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
+
+                    while True:
+                        print("-" * 20)
+                        show_image_in_console(captcha_image_bytes)
+                        captcha_input = input("Enter the characters from the captcha: ")
+
+                        if captcha_input == "":
+                            CONSOLE.print("\n[red][Critical Error] No captcha code was entered")
+                            input("Enter: ")
+                        elif len(captcha_input) < 5 or len(captcha_input) > 10:
+                            CONSOLE.print("\n[red][Critical Error] The captcha code cannot be correct")
+                            input("Enter: ")
+                        else:
+                            break
+
+                    bridges = BridgeDB.get_bridges(bridge_type, captcha_input, captcha_challenge_value, session)
+
+                    if bridges is None:
+                        CONSOLE.print("\n[red][Critical Error] The captcha code was not correct")
+                        input("Enter: ")
+                    else:
+                        break
 
                 with open(os.path.join(DATA_DIR_PATH, bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
                     json.dump(bridges, writeable_file)
         else:
-            if use_bridge_db:
-                with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
-                    captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
-                print("-" * 20)
-                show_image_in_console(captcha_image_bytes)
-                captcha_input = input("Enter the characters from the captcha: ")
+            if not use_bridge_db:
+                for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+                    bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
+                    Bridge.download(specific_bridge_type, session)
+            else:
+                while True:
+                    with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
+                        captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
+                    
+                    while True:
+                        print("-" * 20)
+                        show_image_in_console(captcha_image_bytes)
+                        captcha_input = input("Enter the characters from the captcha: ")
 
-            for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
-                bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
-                if not os.path.isfile(bridge_path):
-                    if not use_bridge_db:
-                        Bridge.download(specific_bridge_type, session)
-                    else:
-                        bridges = BridgeDB.get_bridges(specific_bridge_type, captcha_input, captcha_challenge_value, session)
-                        with open(os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
-                            json.dump(bridges, writeable_file)
+                        if captcha_input == "":
+                            CONSOLE.print("\n[red][Critical Error] No captcha code was entered")
+                            input("Enter: ")
+                        elif len(captcha_input) < 5 or len(captcha_input) > 10:
+                            CONSOLE.print("\n[red][Critical Error] The captcha code cannot be correct")
+                            input("Enter: ")
+                        else:
+                            break
+
+                    for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+                        bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
+                        if not os.path.isfile(bridge_path):
+                            bridges = BridgeDB.get_bridges(specific_bridge_type, captcha_input, captcha_challenge_value, session)
+
+                            if bridges is None:
+                                CONSOLE.print("\n[red][Critical Error] The captcha code was not correct")
+                                input("Enter: ")
+                                break
+
+                            with open(os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
+                                json.dump(bridges, writeable_file)
+                    
+                    is_file_missing = False
+                    for file in BRIDGE_FILES:
+                        if not os.path.isfile(file):
+                            is_file_missing = True
+                    
+                    if not is_file_missing:
+                        break
 
         with CONSOLE.status("[green]Terminating Tor..."):
             Tor.send_shutdown_signal(9010, control_password)
@@ -496,12 +547,7 @@ if not use_default_bridge:
 
     if bridge_type == "random":
         all_bridges = DEFAULT_BRIDGES["snowflake"] + DEFAULT_BRIDGES["meek_lite"]
-        files = [
-            os.path.join(DATA_DIR_PATH, "obfs4.json"),
-            os.path.join(DATA_DIR_PATH, "vanilla.json"),
-            os.path.join(DATA_DIR_PATH, "webtunnel.json")
-        ]
-        for file in files:
+        for file in BRIDGE_FILES:
             try:
                 with open(file, "r", encoding="utf-8") as readable_file:
                     content = json.load(readable_file)
