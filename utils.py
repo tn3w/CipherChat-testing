@@ -36,6 +36,8 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding as asy_padding
 from jinja2 import Environment, select_autoescape, Undefined
+from PIL import Image
+from io import BytesIO
 from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
                  DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES,\
                  CURRENT_DIR_PATH, HTTP_PROXIES, HTTPS_PROXIES
@@ -126,6 +128,32 @@ def generate_random_string(length: int, with_punctuation: bool = True,
 
     random_string = ''.join(secrets.choice(characters) for _ in range(length))
     return random_string
+
+def show_image_in_console(image_bytes: bytes) -> None:
+    """
+    Turns a given image into Ascii Art and prints it in the console
+
+    :param image_bytes: The bytes of the image to be displayed in the console
+    """
+
+    img = Image.open(BytesIO(image_bytes))
+
+    ascii_chars = '@%#*+=-:. '
+    width, height = img.size
+    aspect_ratio = height / width
+    new_width = get_console_columns()
+    new_height = int(aspect_ratio * new_width * 0.55)
+    img = img.resize((new_width, new_height))
+    img = img.convert('L')  # Convert to grayscale
+
+    pixels = img.getdata()
+    ascii_str = ''.join([ascii_chars[min(pixel // 25, len(ascii_chars) - 1)] for pixel in pixels])
+    ascii_str_len = len(ascii_str)
+    ascii_img = ''
+    for i in range(0, ascii_str_len, new_width):
+        ascii_img += ascii_str[i:i + new_width] + '\n'
+
+    print(ascii_img)
 
 class Proxy:
     "Includes all functions that have something to do with proxies"
@@ -599,7 +627,7 @@ class Bridge:
         :param quantity: How many bridges should be selected
         """
 
-        if len(all_bridges) == 1:
+        if len(all_bridges) <= quantity:
             return all_bridges
 
         bridge_types = {}
@@ -694,6 +722,103 @@ class Bridge:
                 bridges = Bridge.select_random(default_bridges, 6)
 
         return bridges
+
+class BridgeDB:
+    "All functions that have something to do with requesting bridges from BridgeDB"
+
+    @staticmethod
+    def get_captcha_challenge(bridge_type: str, session: Optional[requests.Session]) -> Tuple[Optional[bytes], Optional[str]]:
+        """
+        Asks for a captcha from bridges.torproject.org to get bridges
+        
+        :param bridge_type: The type of bridge, can be "vanilla", "obfs4" or "webtunnel"
+        :param session: a requests.Session Object (Optional)
+        """
+
+        if session is None:
+            session = Proxy.get_requests_session()
+
+        try:
+            response = requests.get(
+                "https://bridges.torproject.org/bridges/?transport="\
+                + {"vanilla": "0"}.get(bridge_type, bridge_type),
+                headers = {'User-Agent': random.choice(USER_AGENTS)},
+                timeout = 5
+            )
+            response.raise_for_status()
+
+            if response.status_code == 200:
+                html_content = response.text
+                soup = BeautifulSoup(html_content, 'html.parser')
+
+                captcha_image_bytes, captcha_challenge_value = None, None
+
+                captcha_image_object = soup.select_one('#bridgedb-captcha img')
+                if captcha_image_object:
+                    captcha_image_src = captcha_image_object.get('src')
+
+                    captcha_image_base64 = captcha_image_src.split("data:image/jpeg;base64,")[1]
+
+                    captcha_image_bytes = b64decode(captcha_image_base64)
+
+                captcha_form_object = soup.select_one('#bridgedb-captcha-container form')
+                if captcha_form_object:
+                    captcha_challenge_field_object = captcha_form_object.select_one('input[name="captcha_challenge_field"]')
+
+                    if captcha_challenge_field_object:
+                        captcha_challenge_value = captcha_challenge_field_object.get('value')
+
+                return captcha_image_bytes, captcha_challenge_value
+        except Exception as e:
+            print(f"Error getting captcha challenge: {str(e)}")
+
+    @staticmethod
+    def get_bridges(bridge_type: str, captcha_input: str,
+                    captcha_challenge_value: str, session: Optional[requests.Session]) -> Optional[list]:
+        """
+        Gets the bridges after the captcha has been solved by the user
+        
+        :param bridge_type: The type of bridge, can be "vanilla", "obfs4" or "webtunnel"
+        :param captcha_input: User input of the characters in the captcha
+        :param captcha_challenge_value: Captcha Challenge Value from get_captcha_challenge
+        :param session: a requests.Session Object (Optional)
+        """
+
+        if session is None:
+            session = Proxy.get_requests_session()
+
+        try:
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': random.choice(USER_AGENTS)
+            }
+
+            response = requests.post(
+                "https://bridges.torproject.org/bridges/?transport="\
+                + {"vanilla": "0"}.get(bridge_type, bridge_type), headers = headers,
+                data = {
+                    "captcha_response_field": captcha_input, 
+                    "captcha_challenge_field": captcha_challenge_value
+                },
+                timeout = 5
+            )
+            response.raise_for_status()
+
+            if response.status_code == 200:
+                html_content = response.text
+                soup = BeautifulSoup(html_content, 'html.parser')
+
+                bridges = None
+
+                bridge_lines_object = soup.select_one('#bridgelines')
+                if bridge_lines_object:
+                    bridge_lines = bridge_lines_object.get_text()
+                    bridges = [bridge.strip() for bridge in bridge_lines.strip().split('\n')]
+
+                return bridges
+        except Exception as e:
+            print(f"Error getting bridges: {str(e)}")
+
 
 HIDDEN_SERVICE_CONF_FILE = os.path.join(DATA_DIR_PATH, "hidden-service.conf")
 
