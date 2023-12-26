@@ -19,8 +19,8 @@ from getpass import getpass
 from rich.console import Console
 from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
-                  get_password_strength, is_password_pwned, Tor, Bridge, Linux, SecureDelete,\
-                  AsymmetricEncryption, WebPage, Hashing
+                  get_password_strength, is_password_pwned, generate_random_string, Tor, Bridge,\
+                  Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
@@ -194,7 +194,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
             HOSTNAME = readable_file.read()
     except:
         HOSTNAME = "???"
-    
+
     CONSOLE.print("\n[bright_blue]TOR Hidden Service:", HOSTNAME)
 
     ASYMMETRIC_ENCRYPTION = AsymmetricEncryption().generate_keys()
@@ -242,8 +242,10 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     sys.exit(0)
 
 PERSISTENT_STORAGE_CONF_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.conf")
+PERSISTENT_STORAGE_KEYFILE_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.key")
 use_persistant_storage = None
 persistent_storage_password = None
+persistent_storage_key = None
 
 if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
     try:
@@ -323,6 +325,15 @@ if use_persistant_storage:
             continue
 
         persistent_storage_password = input_persistent_storage_password
+
+    if not os.path.isfile(PERSISTENT_STORAGE_KEYFILE_PATH):
+        persistent_storage_key = generate_random_string(128)
+
+        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "w", encoding = "utf-8") as writeable_file:
+            writeable_file.write(persistent_storage_key)
+    else:
+        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "r", encoding = "utf-8") as readable_file:
+            persistent_storage_key = readable_file.read()
 
 with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_file:
     persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage)]
