@@ -738,7 +738,7 @@ class BridgeDB:
     "All functions that have something to do with requesting bridges from BridgeDB"
 
     @staticmethod
-    def get_captcha_challenge(bridge_type: str, session: Optional[requests.Session])\
+    def get_captcha_challenge(bridge_type: str, session: Optional[requests.Session] = None)\
         -> Tuple[Optional[bytes], Optional[str]]:
         """
         Asks for a captcha from bridges.torproject.org to get bridges

@@ -19,8 +19,8 @@ from getpass import getpass
 from rich.console import Console
 from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
-                  get_password_strength, is_password_pwned, generate_random_string, Tor, Bridge,\
-                  Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing
+                  get_password_strength, is_password_pwned, generate_random_string, show_image_in_console,\
+                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing, BridgeDB
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
 
 if __name__ != "__main__":
@@ -345,20 +345,22 @@ with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_fi
     writeable_file.write('--'.join(persistent_storage_configuration))
 
 BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")
-bridge_type, use_default_bridge = None, None
+bridge_type, use_default_bridge, use_bridge_db = None, None, None
 
 if os.path.isfile(BRIDGE_CONFIG_PATH):
     try:
         with open(BRIDGE_CONFIG_PATH, 'r', encoding='utf-8') as readable_file:
             file_config = readable_file.read()
-        bridge_type, use_default_bridge = file_config.split("--")[:2]
+        bridge_type, use_default_bridge, use_bridge_db = file_config.split("--")[:3]
         use_default_bridge = {"true": True, "false": False}.get(use_default_bridge, True)
+        use_bridge_db = {"true": True, "false": False}.get(use_bridge_db, False)
 
         if not bridge_type in ["obfs4", "webtunnel", "snowflake", "meek_lite", "vanilla", "random"]:
             bridge_type = None
 
         if bridge_type in ["snowflake", "meek_lite"]:
             use_default_bridge = True
+            use_bridge_db = False
     except Exception as e:
         CONSOLE.log(f"[red][Error] The following error occurs when opening and validating the bridge configurations: '{e}'")
 
@@ -394,9 +396,27 @@ if not isinstance(use_default_bridge, bool):
     use_buildin_input = input("Use buildin bridges? [y - yes, n - no]: ")
     use_default_bridge = use_buildin_input.startswith("y")
 
+    if use_default_bridge:
+        use_bridge_db = False
+
+if not isinstance(use_bridge_db, bool):
+    if bridge_type in ["vanilla", "obfs4", "webtunnel", "random"]:
+        use_bridge_db_input = input("Use BridgeDB to get Bridges? [y - yes, n - no]: ")
+        use_bridge_db = use_bridge_db_input.startswith("y")
+    else:
+        use_bridge_db = False
+
 try:
     with open(BRIDGE_CONFIG_PATH, "w", encoding="utf-8") as writeable_file:
-        writeable_file.write('--'.join([bridge_type, {True: "true", False: "false"}.get(use_default_bridge)]))
+        writeable_file.write(
+            '--'.join(
+                [
+                    bridge_type,
+                    {True: "true", False: "false"}.get(use_default_bridge),
+                    {True: "true", False: "false"}.get(use_bridge_db)
+                ]
+            )
+        )
 except Exception as e:
     CONSOLE.log(f"[red][Error] Error saving the bridge configuration file: '{e}'")
 
@@ -432,12 +452,35 @@ if not use_default_bridge:
         session = Tor.get_requests_session(8030, control_password, 8031)
 
         if bridge_type != "random":
-            Bridge.download(bridge_type, session)
+            if not use_bridge_db:
+                Bridge.download(bridge_type, session)
+            else:
+                with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
+                    captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
+                print("-" * 20)
+                show_image_in_console(captcha_image_bytes)
+                captcha_input = input("Enter the characters from the captcha: ")
+                bridges = BridgeDB.get_bridges(bridge_type, captcha_input, captcha_challenge_value, session)
+
+                with open(os.path.join(DATA_DIR_PATH, bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
+                    json.dump(bridges, writeable_file)
         else:
+            if use_bridge_db:
+                with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
+                    captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
+                print("-" * 20)
+                show_image_in_console(captcha_image_bytes)
+                captcha_input = input("Enter the characters from the captcha: ")
+
             for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
                 bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
                 if not os.path.isfile(bridge_path):
-                    Bridge.download(specific_bridge_type, session)
+                    if not use_bridge_db:
+                        Bridge.download(specific_bridge_type, session)
+                    else:
+                        bridges = BridgeDB.get_bridges(specific_bridge_type, captcha_input, captcha_challenge_value, session)
+                        with open(os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
+                            json.dump(bridges, writeable_file)
 
         with CONSOLE.status("[green]Terminating Tor..."):
             Tor.send_shutdown_signal(9010, control_password)
@@ -479,7 +522,6 @@ if not use_default_bridge:
 
     with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
         bridges = Bridge.select_random(all_bridges, 6)
-
 else:
     CONSOLE.print("[bold yellow]~~~ Bridge Selection ~~~")
     bridges = Bridge.choose_buildin(bridge_type)
