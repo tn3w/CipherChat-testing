@@ -40,7 +40,7 @@ from PIL import Image
 from io import BytesIO
 from cons import USER_AGENTS, DISTRO_TO_PACKAGE_MANAGER, PACKAGE_MANAGERS,\
                  DATA_DIR_PATH, BRIDGE_DOWNLOAD_URLS, TEMP_DIR_PATH, DEFAULT_BRIDGES,\
-                 CURRENT_DIR_PATH, HTTP_PROXIES, HTTPS_PROXIES
+                 CURRENT_DIR_PATH, HTTP_PROXIES, HTTPS_PROXIES, BRIDGE_FILES
 
 if __name__ == "__main__":
     print("Use `python main.py`")
@@ -727,7 +727,7 @@ class Bridge:
         :param bridge_type: Type of bridge
         """
 
-        with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
+        with CONSOLE.status("[green]Bridges are selected (This may take some time)..."):
             if not bridge_type == "random":
                 default_bridges = DEFAULT_BRIDGES[bridge_type]
                 bridges = Bridge.select_random(default_bridges, 4)
@@ -737,6 +737,45 @@ class Bridge:
                     default_bridges.extend(specific_bridges)
                 bridges = Bridge.select_random(default_bridges, 6)
 
+        return bridges
+    
+    @staticmethod
+    def choose_bridges(use_default_bridges: bool, bridge_type: str) -> list:
+        """
+        Choose a list of bridges based on specified criteria.
+
+        :param use_default_bridges: Flag indicating whether to use default bridges or not.
+        :param bridge_type: Type of bridges to choose.
+        """
+
+        if use_default_bridges:
+            return Bridge.choose_buildin(bridge_type)
+        
+        with CONSOLE.status("All bridges are loaded..."):
+            if bridge_type == "random":
+                all_bridges = DEFAULT_BRIDGES["snowflake"] + DEFAULT_BRIDGES["meek_lite"]
+                for file in BRIDGE_FILES:
+                    try:
+                        with open(file, "r", encoding="utf-8") as readable_file:
+                            content = json.load(readable_file)
+                        all_bridges.extend(content)
+                    except Exception as e:
+                        bridge_type = file.replace(DATA_DIR_PATH, "").replace(".json", "")
+                        all_bridges.extend(DEFAULT_BRIDGES[bridge_type])
+                        CONSOLE.log(f"[red][Error] Error loading the bridge file: '{file}': '{e}'")
+            else:
+                try:
+                    bridge_file = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
+                    with open(bridge_file, "r", encoding="utf-8") as readable_file:
+                        content = json.load(readable_file)
+                    all_bridges = content
+                except Exception as e:
+                    all_bridges = DEFAULT_BRIDGES[bridge_type]
+                    CONSOLE.log(f"[red][Error] Error loading the bridge file: '{bridge_file}': '{e}'")
+
+        with CONSOLE.status("[green]Bridges are selected (This may take some time)..."):
+            bridges = Bridge.select_random(all_bridges, 6)
+        
         return bridges
 
 class BridgeDB:
@@ -1472,6 +1511,41 @@ class AsymmetricEncryption:
             return True
         except:
             return False
+
+def load_persistent_storage_file(file_name: str, persistent_storage_encryptor: SymmetricEncryption) -> Union[dict, list]:
+    """
+    Load encrypted persistent data from a file.
+
+    Parameters:
+    :param: file_name: The name of the file containing the encrypted data.
+    :param persistent_storage_encryptor: The encryption object to decrypt the data.
+    """
+
+    with open(file_name, "r", encoding = "utf-8") as readable_file:
+        encrypted_persistent_data = readable_file.read()
+
+    persistent_data = persistent_storage_encryptor.decrypt(encrypted_persistent_data)
+    loaded_persistent_data = json.loads(persistent_data)
+
+    return loaded_persistent_data
+
+def dump_persistent_storage_data(file_name: str, persistent_data: Union[dict, list], persistent_storage_encryptor: SymmetricEncryption) -> None:
+    """
+    Dump persistent data into an encrypted file.
+
+    Parameters:
+    :param file_name: The name of the file to store the encrypted data.
+    :param persistent_data: The persistent data to be stored.
+    :param persistent_storage_encryptor: The encryption object to encrypt the data.
+    """
+
+    dumped_persistent_data = json.dumps(persistent_data)
+    encrypted_persistent_data = persistent_storage_encryptor.encrypt(dumped_persistent_data)
+
+    with open(file_name, "w", encoding = "utf-8") as writeable_file:
+        writeable_file.write(encrypted_persistent_data)
+
+    return
 
 class SilentUndefined(Undefined):
     "Class to not get an error when specifying a non-existent argument"

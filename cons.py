@@ -52,6 +52,12 @@ PACKAGE_MANAGERS = [
     {"version_command": "eopkg --version", "installation_command": "eopkg install", "update_command": "eopkg up"}
 ]
 
+BRIDGE_FILES = [
+    os.path.join(DATA_DIR_PATH, "obfs4.json"),
+    os.path.join(DATA_DIR_PATH, "vanilla.json"),
+    os.path.join(DATA_DIR_PATH, "webtunnel.json")
+]
+
 OBFS4_BUILDIN_BRIDGES = [
     "obfs4 85.31.186.98:443 011F2599C0E9B27EE74B353155E244813763C3E5 cert=ayq0XzCwhpdysn5o0EyDUbmSOx3X/oTEbzDMvczHOdBJKlvIdHHLJGkZARtT4dcBFArPPg iat-mode=0",
     "obfs4 193.11.166.194:27015 2D82C2E354D531A68469ADF7F878FA6060C6BACA cert=4TLQPJrTSaDffMK7Nbao6LC7G9OW/NHkUwIdjLSS3KYf0Nv4/nQiiI8dY2TcsQx01NniOg iat-mode=0",

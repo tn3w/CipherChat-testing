@@ -20,8 +20,9 @@ from rich.console import Console
 from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
                   get_password_strength, is_password_pwned, generate_random_string, show_image_in_console,\
-                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing, BridgeDB
-from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION
+                  Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing, BridgeDB, SymmetricEncryption,\
+                  load_persistent_storage_file, dump_persistent_storage_data
+from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION, BRIDGE_FILES
 
 if __name__ != "__main__":
     sys.exit(1)
@@ -241,125 +242,22 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
 
     sys.exit(0)
 
-PERSISTENT_STORAGE_CONF_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.conf")
-PERSISTENT_STORAGE_KEYFILE_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.key")
-use_persistant_storage = None
-persistent_storage_password = None
-persistent_storage_key = None
-
-if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
-    try:
-        with open(PERSISTENT_STORAGE_CONF_PATH, "r", encoding = "utf-8") as readable_file:
-            persistent_storage_configuration = readable_file.read()
-
-        conf_use_persistent_storage, conf_password_hash = persistent_storage_configuration.split("--")
-        use_persistant_storage = {"true": True, "false": False}.get(conf_use_persistent_storage)
-
-        if len(conf_password_hash) == 154:
-            while persistent_storage_password is None:
-                clear_console()
-                CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
-                input_persistent_storage_password = getpass("Please enter your Persistent Storage password: ")
-
-                if input_persistent_storage_password == "":
-                    CONSOLE.print("\n[red][Error] No password was entered.")
-                    input("Enter: ")
-                    continue
-
-                if not Hashing().compare(input_persistent_storage_password, conf_password_hash):
-                    print(input_persistent_storage_password, conf_password_hash)
-                    CONSOLE.print("\n[red][Error] The password entered is not the Persistent Storage password")
-                    input("Enter: ")
-                    continue
-
-                persistent_storage_password = input_persistent_storage_password
-    except:
-        pass
-
-if use_persistant_storage is None:
-    clear_console()
-    CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
-    input_use_persistant_storage = input("Would you like to use Persistent Storage with password protection? [y - yes or n - no] ")
-    use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
-
-if use_persistant_storage:
-    while persistent_storage_password is None:
-        clear_console()
-        CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
-        print("Would you like to use Persistent Storage with password protection? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
-
-        input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
-
-        if input_persistent_storage_password == "":
-            CONSOLE.print("\n[red][Critical Error] No password was entered.")
-            input("Enter: ")
-            continue
-
-        with CONSOLE.status("[green]Calculating the password strength..."):
-            password_strength = get_password_strength(input_persistent_storage_password)
-            password_strength_color = "green" if password_strength > 95 else "yellow" if password_strength > 80 else "red"
-        CONSOLE.print(f"[{password_strength_color}]Password Strength: {password_strength}% / 100%")
-
-        if password_strength < 80:
-            CONSOLE.print("\n[red][Error] Your password is not secure enough.")
-            input_continue = input("Still use it? [y - yes or n - no] ")
-
-            if not input_continue.lower().startswith("y"):
-                continue
-
-        with CONSOLE.status("[green]Checking your password for data leaks..."):
-            is_password_safe = is_password_pwned(input_persistent_storage_password)
-
-        if not is_password_safe:
-            CONSOLE.print("\n[red][Error] Your password is included in data leaks.")
-            input_continue = input("Still use it? [y - yes or n - no] ")
-
-            if not input_continue.lower().startswith("y"):
-                continue
-
-        input_persistent_storage_password_check = getpass("\nPlease enter your password again: ")
-
-        if not input_persistent_storage_password == input_persistent_storage_password_check:
-            CONSOLE.print("[red][Critical Error] The passwords do not match.")
-            input("Enter: ")
-            continue
-
-        persistent_storage_password = input_persistent_storage_password
-
-    if not os.path.isfile(PERSISTENT_STORAGE_KEYFILE_PATH):
-        persistent_storage_key = generate_random_string(128)
-
-        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "w", encoding = "utf-8") as writeable_file:
-            writeable_file.write(persistent_storage_key)
-    else:
-        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "r", encoding = "utf-8") as readable_file:
-            persistent_storage_key = readable_file.read()
-
-with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_file:
-    persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage)]
-    if persistent_storage_password is None:
-        persistent_storage_configuration.append("")
-    else:
-        persistent_storage_configuration.append(Hashing().hash(persistent_storage_password, 64))
-
-    writeable_file.write('--'.join(persistent_storage_configuration))
-
 BRIDGE_CONFIG_PATH = os.path.join(DATA_DIR_PATH, "bridge.conf")
-bridge_type, use_default_bridge, use_bridge_db = None, None, None
+bridge_type, use_default_bridges, use_bridge_db = None, None, None
 
 if os.path.isfile(BRIDGE_CONFIG_PATH):
     try:
         with open(BRIDGE_CONFIG_PATH, 'r', encoding='utf-8') as readable_file:
             file_config = readable_file.read()
-        bridge_type, use_default_bridge, use_bridge_db = file_config.split("--")[:3]
-        use_default_bridge = {"true": True, "false": False}.get(use_default_bridge, True)
+        bridge_type, use_default_bridges, use_bridge_db = file_config.split("--")[:3]
+        use_default_bridges = {"true": True, "false": False}.get(use_default_bridges, True)
         use_bridge_db = {"true": True, "false": False}.get(use_bridge_db, False)
 
         if not bridge_type in ["obfs4", "webtunnel", "snowflake", "meek_lite", "vanilla", "random"]:
             bridge_type = None
 
         if bridge_type in ["snowflake", "meek_lite"]:
-            use_default_bridge = True
+            use_default_bridges = True
             use_bridge_db = False
     except Exception as e:
         CONSOLE.log(f"[red][Error] The following error occurs when opening and validating the bridge configurations: '{e}'")
@@ -390,13 +288,13 @@ if bridge_type is None:
             break
 
     if bridge_type in ["snowflake", "meek_lite"]:
-        use_default_bridge = True
+        use_default_bridges = True
 
-if not isinstance(use_default_bridge, bool):
+if not isinstance(use_default_bridges, bool):
     use_buildin_input = input("Use buildin bridges? [y - yes, n - no]: ")
-    use_default_bridge = use_buildin_input.startswith("y")
+    use_default_bridges = use_buildin_input.startswith("y")
 
-    if use_default_bridge:
+    if use_default_bridges:
         use_bridge_db = False
 
 if not isinstance(use_bridge_db, bool):
@@ -412,7 +310,7 @@ try:
             '--'.join(
                 [
                     bridge_type,
-                    {True: "true", False: "false"}.get(use_default_bridge),
+                    {True: "true", False: "false"}.get(use_default_bridges),
                     {True: "true", False: "false"}.get(use_bridge_db)
                 ]
             )
@@ -423,13 +321,8 @@ except Exception as e:
 clear_console()
 
 bridges = None
-BRIDGE_FILES = [
-    os.path.join(DATA_DIR_PATH, "obfs4.json"),
-    os.path.join(DATA_DIR_PATH, "vanilla.json"),
-    os.path.join(DATA_DIR_PATH, "webtunnel.json")
-]
 
-if not use_default_bridge:
+if not use_default_bridges:
     is_file_missing = False
     if bridge_type != "random":
         bridge_path = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
@@ -542,32 +435,121 @@ if not use_default_bridge:
             SecureDelete.directory(TEMP_DIR_PATH)
         CONSOLE.print("[green]~ Cleaning up... Done")
 
+
+PERSISTENT_STORAGE_CONF_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.conf")
+PERSISTENT_STORAGE_KEYFILE_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.key")
+use_persistant_storage = None
+persistent_storage_password = None
+persistent_storage_key = None
+
+if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
+    try:
+        with open(PERSISTENT_STORAGE_CONF_PATH, "r", encoding = "utf-8") as readable_file:
+            persistent_storage_configuration = readable_file.read()
+
+        conf_use_persistent_storage, conf_password_hash = persistent_storage_configuration.split("--")
+        use_persistant_storage = {"true": True, "false": False}.get(conf_use_persistent_storage)
+
+        if len(conf_password_hash) == 154:
+            while persistent_storage_password is None:
+                clear_console()
+                CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+                input_persistent_storage_password = getpass("Please enter your Persistent Storage password: ")
+
+                if input_persistent_storage_password == "":
+                    CONSOLE.print("\n[red][Error] No password was entered.")
+                    input("Enter: ")
+                    continue
+
+                if not Hashing().compare(input_persistent_storage_password, conf_password_hash):
+                    CONSOLE.print("\n[red][Error] The password entered is not the Persistent Storage password")
+                    input("Enter: ")
+                    continue
+
+                persistent_storage_password = input_persistent_storage_password
+    except:
+        pass
+
+if use_persistant_storage is None:
     clear_console()
-    CONSOLE.print("[bold yellow]~~~ Bridge Selection ~~~")
+    CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+    input_use_persistant_storage = input("Would you like to use Persistent Storage with password protection? [y - yes or n - no] ")
+    use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
 
-    if bridge_type == "random":
-        all_bridges = DEFAULT_BRIDGES["snowflake"] + DEFAULT_BRIDGES["meek_lite"]
-        for file in BRIDGE_FILES:
-            try:
-                with open(file, "r", encoding="utf-8") as readable_file:
-                    content = json.load(readable_file)
-                all_bridges.extend(content)
-            except Exception as e:
-                bridge_type = file.replace(DATA_DIR_PATH, "").replace(".json", "")
-                all_bridges.extend(DEFAULT_BRIDGES[bridge_type])
-                CONSOLE.log(f"[red][Error] Error loading the bridge file: '{file}': '{e}'")
+if use_persistant_storage:
+    while persistent_storage_password is None:
+        clear_console()
+        CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+        print("Would you like to use Persistent Storage with password protection? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
+
+        input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
+
+        if input_persistent_storage_password == "":
+            CONSOLE.print("\n[red][Critical Error] No password was entered.")
+            input("Enter: ")
+            continue
+
+        with CONSOLE.status("[green]Calculating the password strength..."):
+            password_strength = get_password_strength(input_persistent_storage_password)
+            password_strength_color = "green" if password_strength > 95 else "yellow" if password_strength > 80 else "red"
+        CONSOLE.print(f"[{password_strength_color}]Password Strength: {password_strength}% / 100%")
+
+        if password_strength < 80:
+            CONSOLE.print("\n[red][Error] Your password is not secure enough.")
+            input_continue = input("Still use it? [y - yes or n - no] ")
+
+            if not input_continue.lower().startswith("y"):
+                continue
+
+        with CONSOLE.status("[green]Checking your password for data leaks..."):
+            is_password_safe = is_password_pwned(input_persistent_storage_password)
+
+        if not is_password_safe:
+            CONSOLE.print("\n[red][Error] Your password is included in data leaks.")
+            input_continue = input("Still use it? [y - yes or n - no] ")
+
+            if not input_continue.lower().startswith("y"):
+                continue
+
+        input_persistent_storage_password_check = getpass("\nPlease enter your password again: ")
+
+        if not input_persistent_storage_password == input_persistent_storage_password_check:
+            CONSOLE.print("[red][Critical Error] The passwords do not match.")
+            input("Enter: ")
+            continue
+
+        persistent_storage_password = input_persistent_storage_password
+
+    if not os.path.isfile(PERSISTENT_STORAGE_KEYFILE_PATH):
+        persistent_storage_key = generate_random_string(128)
+
+        encrypted_storage_key = SymmetricEncryption(persistent_storage_password).encrypt(persistent_storage_key)
+        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "w", encoding = "utf-8") as writeable_file:
+            writeable_file.write(encrypted_storage_key)
     else:
-        try:
-            bridge_file = os.path.join(DATA_DIR_PATH, bridge_type + ".json")
-            with open(bridge_file, "r", encoding="utf-8") as readable_file:
-                content = json.load(readable_file)
-            all_bridges = content
-        except Exception as e:
-            all_bridges = DEFAULT_BRIDGES[bridge_type]
-            CONSOLE.log(f"[red][Error] Error loading the bridge file: '{bridge_file}': '{e}'")
+        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "r", encoding = "utf-8") as readable_file:
+            encrypted_storage_key = readable_file.read()
+        persistent_storage_key = SymmetricEncryption(persistent_storage_password).decrypt(encrypted_storage_key)
+    
+    persistent_storage_encryptor = SymmetricEncryption(persistent_storage_password + persistent_storage_key)
 
-    with CONSOLE.status("[green]Bridges are selected (this can take up to 2 minutes)..."):
-        bridges = Bridge.select_random(all_bridges, 6)
-else:
-    CONSOLE.print("[bold yellow]~~~ Bridge Selection ~~~")
-    bridges = Bridge.choose_buildin(bridge_type)
+with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_file:
+    persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage)]
+    if persistent_storage_password is None:
+        persistent_storage_configuration.append("")
+    else:
+        persistent_storage_configuration.append(Hashing().hash(persistent_storage_password, 64))
+
+    writeable_file.write('--'.join(persistent_storage_configuration))
+
+while True:
+    saved_hidden_services = {}
+
+    SAVED_HIDDEN_SERVICES_PATH = os.path.join(DATA_DIR_PATH, "saved-hidden-services.pst")
+
+    if use_persistant_storage:
+        if os.path.isfile(SAVED_HIDDEN_SERVICES_PATH):
+            try:
+                saved_hidden_services = load_persistent_storage_file(SAVED_HIDDEN_SERVICES_PATH, persistent_storage_encryptor)
+            except:
+                pass
