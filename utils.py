@@ -978,7 +978,7 @@ class Tor:
             if not len(bridges) == 0:
                 temp_config.write(f"UseBridges 1\nClientTransportPlugin obfs4 exec {LYREBIRD_EXECUTABLE_PATH}\nClientTransportPlugin snowflake exec {SNOWFLAKE_EXECUTABLE_PATH}\nClientTransportPlugin webtunnel exec {WEBTUNNEL_EXECUTABLE_PATH}\nClientTransportPlugin meek_lite exec {CONJURE_EXECUTABLE_PATH}")
             for bridge in bridges:
-                temp_config.write(f"Bridge {bridge}\n")
+                temp_config.write(f"\nBridge {bridge}")
 
             if not other_configuration is None:
                 if not other_configuration.get("hidden_service_dir") is None:
