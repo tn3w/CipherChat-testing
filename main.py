@@ -460,25 +460,29 @@ if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
         with open(PERSISTENT_STORAGE_CONF_PATH, "r", encoding = "utf-8") as readable_file:
             persistent_storage_configuration = readable_file.read()
 
-        conf_use_persistent_storage, conf_password_hash = persistent_storage_configuration.split("--")
+        conf_use_persistent_storage, encrypted_persistent_storage_key = persistent_storage_configuration.split("--")
         use_persistant_storage = {"true": True, "false": False}.get(conf_use_persistent_storage)
 
-        if len(conf_password_hash) == 154:
-            while persistent_storage_password is None:
-                clear_console()
-                CONSOLE.print("[bold]~~~ Persistent Storage ~~~", style=ORANGE_STYLE)
-                input_persistent_storage_password = getpass("Please enter your Persistent Storage password: ")
+        while persistent_storage_password is None:
+            clear_console()
+            CONSOLE.print("[bold]~~~ Persistent Storage ~~~", style=ORANGE_STYLE)
+            input_persistent_storage_password = getpass("Please enter your Persistent Storage password: ")
 
-                if input_persistent_storage_password == "":
-                    CONSOLE.print("\n[red][Error] No password was entered.")
-                    input("Enter: ")
-                    continue
-
-                if not Hashing().compare(input_persistent_storage_password, conf_password_hash):
-                    CONSOLE.print("\n[red][Error] The password entered is not the Persistent Storage password")
-                    input("Enter: ")
-                    continue
-
+            if input_persistent_storage_password == "":
+                CONSOLE.print("\n[red][Error] No password was entered.")
+                input("Enter: ")
+                continue
+                
+            try:
+                persistent_storage_key = SymmetricEncryption(input_persistent_storage_password).decrypt(encrypted_persistent_storage_key)
+                if len(persistent_storage_key) != 128:
+                    persistent_storage_key = None
+                    raise Exception()
+            except:
+                CONSOLE.print("\n[red][Error] The password entered is not the Persistent Storage password")
+                input("Enter: ")
+                continue
+            else:
                 persistent_storage_password = input_persistent_storage_password
     except:
         pass
@@ -532,26 +536,17 @@ if use_persistant_storage:
             continue
 
         persistent_storage_password = input_persistent_storage_password
-
-    if not os.path.isfile(PERSISTENT_STORAGE_KEYFILE_PATH):
+    
+    if persistent_storage_key is None:
         persistent_storage_key = generate_random_string(128)
-
-        encrypted_storage_key = SymmetricEncryption(persistent_storage_password).encrypt(persistent_storage_key)
-        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "w", encoding = "utf-8") as writeable_file:
-            writeable_file.write(encrypted_storage_key)
-    else:
-        with open(PERSISTENT_STORAGE_KEYFILE_PATH, "r", encoding = "utf-8") as readable_file:
-            encrypted_storage_key = readable_file.read()
-        persistent_storage_key = SymmetricEncryption(persistent_storage_password).decrypt(encrypted_storage_key)
     
     persistent_storage_encryptor = SymmetricEncryption(persistent_storage_password + persistent_storage_key)
 
 with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_file:
     persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage)]
-    if persistent_storage_password is None:
-        persistent_storage_configuration.append("")
-    else:
-        persistent_storage_configuration.append(Hashing().hash(persistent_storage_password, 64))
+    if not persistent_storage_password is None:
+        encrypted_persistent_storage_key = SymmetricEncryption(persistent_storage_password).encrypt(persistent_storage_key)
+        persistent_storage_configuration.append(encrypted_persistent_storage_key)
 
     writeable_file.write('--'.join(persistent_storage_configuration))
 
