@@ -79,6 +79,13 @@ if SYSTEM not in ["Windows", "Linux", "macOS"]:
 if not os.path.isdir(DATA_DIR_PATH):
     os.mkdir(DATA_DIR_PATH)
 
+def atexit_delete_files():
+    with CONSOLE.status("[green]Cleaning up..."):
+        SecureDelete.directory(TEMP_DIR_PATH)
+        SecureDelete.file(os.path.join(DATA_DIR_PATH, "torrc"))
+
+atexit.register(atexit_delete_files)
+
 GNUPG_EXECUTABLE_PATH = get_gnupg_path()
 
 if not os.path.isfile(GNUPG_EXECUTABLE_PATH):
@@ -156,7 +163,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     CONSOLE.print("[bold yellow]~~~ Starting Tor Hidden Service ~~~")
 
     with CONSOLE.status("[green]Getting Tor Configuration..."):
-        control_port, socks_port = Tor.get_ports(True)
+        control_port, socks_port = Tor.get_ports(9000)
         configuration = Tor.get_hidden_service_config()
 
         control_port = configuration.get("control_port", control_port)
@@ -341,99 +348,104 @@ if not use_default_bridges:
 
         bridges = Bridge.choose_buildin(bridge_type)
 
+        control_port, socks_port = Tor.get_ports(4000)
+
         with CONSOLE.status("[green]Starting Tor Executable..."):
-            tor_process, control_password = Tor.launch_tor_with_config(8030, 8031, bridges)
+            tor_process, control_password = Tor.launch_tor_with_config(control_port, socks_port, bridges)
 
-        if not os.path.isdir(TEMP_DIR_PATH):
-            os.mkdir(TEMP_DIR_PATH)
-
-        session = Tor.get_requests_session(8030, control_password, 8031)
-
-        if bridge_type != "random":
-            if not use_bridge_db:
-                Bridge.download(bridge_type, session)
-            else:
-                while True:
-                    with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
-                        captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
-
-                    while True:
-                        print("-" * 20)
-                        show_image_in_console(captcha_image_bytes)
-                        captcha_input = input("Enter the characters from the captcha: ")
-
-                        if captcha_input == "":
-                            CONSOLE.print("\n[red][Critical Error] No captcha code was entered")
-                            input("Enter: ")
-                        elif len(captcha_input) < 5 or len(captcha_input) > 10:
-                            CONSOLE.print("\n[red][Critical Error] The captcha code cannot be correct")
-                            input("Enter: ")
-                        else:
-                            break
-
-                    bridges = BridgeDB.get_bridges(bridge_type, captcha_input, captcha_challenge_value, session)
-
-                    if bridges is None:
-                        CONSOLE.print("\n[red][Critical Error] The captcha code was not correct")
-                        input("Enter: ")
-                    else:
-                        break
-
-                with open(os.path.join(DATA_DIR_PATH, bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
-                    json.dump(bridges, writeable_file)
+        if tor_process is None:
+            CONSOLE.print("[red][Error] Tor apparently could not be started properly")
         else:
-            if not use_bridge_db:
-                for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
-                    bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
-                    Bridge.download(specific_bridge_type, session)
-            else:
-                while True:
-                    with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
-                        captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
-                    
+            if not os.path.isdir(TEMP_DIR_PATH):
+                os.mkdir(TEMP_DIR_PATH)
+
+            session = Tor.get_requests_session(control_port, control_password, socks_port)
+
+            if bridge_type != "random":
+                if not use_bridge_db:
+                    Bridge.download(bridge_type, session)
+                else:
                     while True:
-                        print("-" * 20)
-                        show_image_in_console(captcha_image_bytes)
-                        captcha_input = input("Enter the characters from the captcha: ")
+                        with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
+                            captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
 
-                        if captcha_input == "":
-                            CONSOLE.print("\n[red][Critical Error] No captcha code was entered")
-                            input("Enter: ")
-                        elif len(captcha_input) < 5 or len(captcha_input) > 10:
-                            CONSOLE.print("\n[red][Critical Error] The captcha code cannot be correct")
-                            input("Enter: ")
-                        else:
-                            break
+                        while True:
+                            print("-" * 20)
+                            show_image_in_console(captcha_image_bytes)
+                            captcha_input = input("Enter the characters from the captcha: ")
 
-                    for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
-                        bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
-                        if not os.path.isfile(bridge_path):
-                            bridges = BridgeDB.get_bridges(specific_bridge_type, captcha_input, captcha_challenge_value, session)
-
-                            if bridges is None:
-                                CONSOLE.print("\n[red][Critical Error] The captcha code was not correct")
+                            if captcha_input == "":
+                                CONSOLE.print("\n[red][Critical Error] No captcha code was entered")
                                 input("Enter: ")
+                            elif len(captcha_input) < 5 or len(captcha_input) > 10:
+                                CONSOLE.print("\n[red][Critical Error] The captcha code cannot be correct")
+                                input("Enter: ")
+                            else:
                                 break
 
-                            with open(os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
-                                json.dump(bridges, writeable_file)
-                    
-                    is_file_missing = False
-                    for file in BRIDGE_FILES:
-                        if not os.path.isfile(file):
-                            is_file_missing = True
-                    
-                    if not is_file_missing:
-                        break
+                        bridges = BridgeDB.get_bridges(bridge_type, captcha_input, captcha_challenge_value, session)
 
-        with CONSOLE.status("[green]Terminating Tor..."):
-            Tor.send_shutdown_signal(9010, control_password)
-            time.sleep(1)
-            tor_process.terminate()
+                        if bridges is None:
+                            CONSOLE.print("\n[red][Critical Error] The captcha code was not correct")
+                            input("Enter: ")
+                        else:
+                            break
 
-        with CONSOLE.status("[green]Cleaning up (this can take up to 1 minute)..."):
-            SecureDelete.directory(TEMP_DIR_PATH)
-        CONSOLE.print("[green]~ Cleaning up... Done")
+                    with open(os.path.join(DATA_DIR_PATH, bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
+                        json.dump(bridges, writeable_file)
+            else:
+                if not use_bridge_db:
+                    for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+                        bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
+                        Bridge.download(specific_bridge_type, session)
+                else:
+                    while True:
+                        with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
+                            captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
+                        
+                        while True:
+                            print("-" * 20)
+                            show_image_in_console(captcha_image_bytes)
+                            captcha_input = input("Enter the characters from the captcha: ")
+
+                            if captcha_input == "":
+                                CONSOLE.print("\n[red][Critical Error] No captcha code was entered")
+                                input("Enter: ")
+                            elif len(captcha_input) < 5 or len(captcha_input) > 10:
+                                CONSOLE.print("\n[red][Critical Error] The captcha code cannot be correct")
+                                input("Enter: ")
+                            else:
+                                break
+
+                        for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
+                            bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
+                            if not os.path.isfile(bridge_path):
+                                bridges = BridgeDB.get_bridges(specific_bridge_type, captcha_input, captcha_challenge_value, session)
+
+                                if bridges is None:
+                                    CONSOLE.print("\n[red][Critical Error] The captcha code was not correct")
+                                    input("Enter: ")
+                                    break
+
+                                with open(os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json"), "w", encoding = "utf-8") as writeable_file:
+                                    json.dump(bridges, writeable_file)
+                        
+                        is_file_missing = False
+                        for file in BRIDGE_FILES:
+                            if not os.path.isfile(file):
+                                is_file_missing = True
+                        
+                        if not is_file_missing:
+                            break
+
+            with CONSOLE.status("[green]Terminating Tor..."):
+                Tor.send_shutdown_signal(control_port, control_password)
+                time.sleep(1)
+                tor_process.terminate()
+
+            with CONSOLE.status("[green]Cleaning up (this can take up to 1 minute)..."):
+                SecureDelete.directory(TEMP_DIR_PATH)
+            CONSOLE.print("[green]~ Cleaning up... Done")
 
 
 PERSISTENT_STORAGE_CONF_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.conf")
@@ -473,14 +485,14 @@ if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
 if use_persistant_storage is None:
     clear_console()
     CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
-    input_use_persistant_storage = input("Would you like to use Persistent Storage with password protection? [y - yes or n - no] ")
+    input_use_persistant_storage = input("Would you like to use Persistent Storage? [y - yes or n - no] ")
     use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
 
 if use_persistant_storage:
     while persistent_storage_password is None:
         clear_console()
         CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
-        print("Would you like to use Persistent Storage with password protection? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
+        print("Would you like to use Persistent Storage? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
 
         input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
 

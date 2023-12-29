@@ -934,8 +934,8 @@ class Tor:
             for process in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
                 if "tor" == process.name().strip():
                     process.terminate()
-        except:
-            pass
+        except Exception as e:
+            CONSOLE.print(f"[red][Error] Error when terminating Tor: `{e}`")
 
     @staticmethod
     def launch_tor_with_config(control_port: int, socks_port: int, bridges: list,
@@ -954,8 +954,8 @@ class Tor:
         """
 
         if control_password is None:
-            control_password = generate_random_string(16)
-
+            control_password = generate_random_string(16, with_punctuation=False)
+        
         tor_process = subprocess.Popen(
             [TOR_EXECUTABLE_PATH, "--hash-password", control_password],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -1010,20 +1010,24 @@ class Tor:
             if not warn_time is None:
                 if warn_time + 10 < int(time.time()):
                     break
-
-        with Controller.from_port(port=control_port) as controller:
-            try:
+        
+        os.remove(temp_config_path)
+        
+        try:
+            with Controller.from_port(port=control_port) as controller:
                 controller.authenticate(password=control_password)
-            except:
-                Tor.terminate_tor_processes()
-            else:
+
                 start_time = time.time()
                 while not controller.is_alive():
-                    if time.time() - start_time > 30:
+                    if time.time() - start_time > 20:
                         raise TimeoutError("Timeout!")
                     time.sleep(1)
-
-        os.remove(temp_config_path)
+        except Exception as e:
+            CONSOLE.print(f"[red][Error] Error when checking whether TOR has started correctly: `{e}`")
+            Tor.send_shutdown_signal(control_port, control_password)
+            time.sleep(1)
+            tor_process.terminate()
+            return None, None
 
         return tor_process, control_password
 
@@ -1085,16 +1089,14 @@ class Tor:
         return session
 
     @staticmethod
-    def get_ports(as_hidden_service = False) -> Tuple[int, int]:
+    def get_ports(port_range: int = 5000) -> Tuple[int, int]:
         """
         Function for getting control and socks port
         
-        :param as_hidden_service: If True, other ports are used
+        :param port_range: In which range the ports should be
         """
 
-        control_port, socks_port, random_range = {
-            True: (5030, 5031, 5000)
-        }.get(as_hidden_service, (9030, 9031, 9000))
+        control_port, socks_port = port_range + 30, port_range + 31
 
         def is_port_in_use(port):
             try:
@@ -1106,7 +1108,7 @@ class Tor:
 
         def find_avaiable_port(without_port = None):
             while True:
-                random_port = secrets.randbelow(random_range) + 1000
+                random_port = secrets.randbelow(port_range) + 1000
                 if random_port == without_port:
                     continue
                 if not is_port_in_use(random_port):
