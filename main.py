@@ -23,8 +23,8 @@ from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
                   get_password_strength, is_password_pwned, generate_random_string, show_image_in_console,\
                   Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing, BridgeDB, SymmetricEncryption,\
-                  load_persistent_storage_file, dump_persistent_storage_data, shorten_text, atexit_terminate_tor
-from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION, BRIDGE_FILES
+                  Proxy, load_persistent_storage_file, dump_persistent_storage_data, shorten_text, atexit_terminate_tor
+from cons import DATA_DIR_PATH, TEMP_DIR_PATH, VERSION, BRIDGE_FILES, HTTP_PROXIES, HTTPS_PROXIES
 
 if __name__ != "__main__":
     sys.exit(1)
@@ -123,6 +123,8 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
 
     with CONSOLE.status("[green]Loading Tor Keys from keys.gnupg.net..."):
         try:
+            os.environ['http_proxy'] = Proxy._select_random(HTTP_PROXIES)
+            os.environ['https_proxy'] = Proxy._select_random(HTTPS_PROXIES)
             subprocess.run(
                 [GNUPG_EXECUTABLE_PATH, "--keyserver", "keys.gnupg.net", "--recv-keys", "0xEF6E286DDA85EA2A4BA7DE684E2C6E8793298290"],
                 check=True
@@ -190,15 +192,7 @@ if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
         )
     CONSOLE.print("[green]~ Starting Tor Executable.. Done")
 
-    def atexit_terminate_tor():
-        "Executes on exit so that Tor is shut down correctly"
-
-        with CONSOLE.status("[green]Terminating Tor..."):
-            Tor.send_shutdown_signal(control_port, control_password)
-            time.sleep(1)
-            tor_process.terminate()
-
-    atexit.register(atexit_terminate_tor)
+    atexit.register(atexit_terminate_tor, control_port = control_port, control_password = control_password, tor_process = tor_process)
 
     hostname_path = os.path.join(hidden_service_dir, "hostname")
 
