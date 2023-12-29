@@ -113,6 +113,24 @@ def get_system_architecture() -> Tuple[str, str]:
 
     return system, machine
 
+def shorten_text(text: str, length: int) -> str:
+    """
+    Function to shorten the text and append "...".
+
+    :param text: The text to be shortened
+    :param length: The length of the text
+    """
+
+    if len(text) > length:
+        text = text[:length] + "..."
+    return text
+
+def atexit_terminate_tor(control_port, control_password, tor_process):
+    with CONSOLE.status("[green]Terminating Tor..."):
+        Tor.send_shutdown_signal(control_port, control_password)
+        time.sleep(1)
+        tor_process.terminate()
+
 def generate_random_string(length: int, with_punctuation: bool = True,
                            with_letters: bool = True) -> str:
     """
@@ -1002,6 +1020,9 @@ class Tor:
                 print(line)
                 if "[notice] Bootstrapped 100% (done): Done" in line:
                     break
+
+                if "Bootstrapped" in line:
+                    warn_time = None
 
                 if warn_time is None:
                     if "[err]" in line or "[warn]" in line:

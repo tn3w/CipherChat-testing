@@ -11,17 +11,19 @@ import tarfile
 import json
 import time
 import atexit
+import re
 import sys
 from sys import argv as ARGUMENTS
 import logging
 from typing import Optional
 from getpass import getpass
 from rich.console import Console
+from rich.style import Style
 from flask import Flask, abort
 from utils import clear_console, get_system_architecture, download_file, get_gnupg_path,\
                   get_password_strength, is_password_pwned, generate_random_string, show_image_in_console,\
                   Tor, Bridge, Linux, SecureDelete, AsymmetricEncryption, WebPage, Hashing, BridgeDB, SymmetricEncryption,\
-                  load_persistent_storage_file, dump_persistent_storage_data
+                  load_persistent_storage_file, dump_persistent_storage_data, shorten_text, atexit_terminate_tor
 from cons import DATA_DIR_PATH, TEMP_DIR_PATH, DEFAULT_BRIDGES, VERSION, BRIDGE_FILES
 
 if __name__ != "__main__":
@@ -39,6 +41,7 @@ if "-a" in ARGUMENTS or "--about" in ARGUMENTS:
     sys.exit(0)
 
 CONSOLE = Console()
+ORANGE_STYLE = Style(color="rgb(255,158,51)")
 
 if "-k" in ARGUMENTS or "--killswitch" in ARGUMENTS:
     clear_console()
@@ -81,8 +84,10 @@ if not os.path.isdir(DATA_DIR_PATH):
 
 def atexit_delete_files():
     with CONSOLE.status("[green]Cleaning up..."):
-        SecureDelete.directory(TEMP_DIR_PATH)
-        SecureDelete.file(os.path.join(DATA_DIR_PATH, "torrc"))
+        if os.path.isdir(TEMP_DIR_PATH):
+            SecureDelete.directory(TEMP_DIR_PATH)
+        if os.path.isfile(os.path.join(DATA_DIR_PATH, "torrc")):
+            SecureDelete.file(os.path.join(DATA_DIR_PATH, "torrc"))
 
 atexit.register(atexit_delete_files)
 
@@ -101,7 +106,7 @@ TOR_EXECUTABLE_PATH = {
 }.get(SYSTEM, os.path.join(DATA_DIR_PATH, "tor/tor/tor"))
 
 if not os.path.isfile(TOR_EXECUTABLE_PATH):
-    CONSOLE.print("[bold yellow]~~~ Installing Tor ~~~")
+    CONSOLE.print("[bold]~~~ Installing Tor ~~~", style=ORANGE_STYLE)
     with CONSOLE.status("[green]Trying to get the download links for Tor..."):
         download_link, signature_link = Tor.get_download_link()
     CONSOLE.print("[green]~ Trying to get the download links for Tor... Done")
@@ -160,7 +165,7 @@ if not os.path.isfile(TOR_EXECUTABLE_PATH):
 
 if "-t" in ARGUMENTS or "--torhiddenservice" in ARGUMENTS:
     clear_console()
-    CONSOLE.print("[bold yellow]~~~ Starting Tor Hidden Service ~~~")
+    CONSOLE.print("[bold]~~~ Starting Tor Hidden Service ~~~", style=ORANGE_STYLE)
 
     with CONSOLE.status("[green]Getting Tor Configuration..."):
         control_port, socks_port = Tor.get_ports(9000)
@@ -275,7 +280,7 @@ if bridge_type is None:
 
     while True:
         clear_console()
-        CONSOLE.print("[bold yellow]~~~ Bridge selection ~~~")
+        CONSOLE.print("[bold]~~~ Bridge selection ~~~", style=ORANGE_STYLE)
 
         for i, option in enumerate(bridge_types):
             if i == selected_option:
@@ -344,7 +349,7 @@ if not use_default_bridges:
 
     if is_file_missing:
         clear_console()
-        CONSOLE.print("[bold yellow]~~~ Downloading Tor Bridges ~~~")
+        CONSOLE.print("[bold]~~~ Downloading Tor Bridges ~~~", style=ORANGE_STYLE)
 
         bridges = Bridge.choose_buildin(bridge_type)
 
@@ -356,6 +361,8 @@ if not use_default_bridges:
         if tor_process is None:
             CONSOLE.print("[red][Error] Tor apparently could not be started properly")
         else:
+            atexit.register(atexit_terminate_tor, control_port = control_port, control_password = control_password, tor_process = tor_process)
+
             if not os.path.isdir(TEMP_DIR_PATH):
                 os.mkdir(TEMP_DIR_PATH)
 
@@ -465,7 +472,7 @@ if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
         if len(conf_password_hash) == 154:
             while persistent_storage_password is None:
                 clear_console()
-                CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+                CONSOLE.print("[bold]~~~ Persistent Storage ~~~", style=ORANGE_STYLE)
                 input_persistent_storage_password = getpass("Please enter your Persistent Storage password: ")
 
                 if input_persistent_storage_password == "":
@@ -484,14 +491,14 @@ if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
 
 if use_persistant_storage is None:
     clear_console()
-    CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+    CONSOLE.print("[bold]~~~ Persistent Storage ~~~", style=ORANGE_STYLE)
     input_use_persistant_storage = input("Would you like to use Persistent Storage? [y - yes or n - no] ")
     use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
 
 if use_persistant_storage:
     while persistent_storage_password is None:
         clear_console()
-        CONSOLE.print("[bold yellow]~~~ Persistent Storage ~~~")
+        CONSOLE.print("[bold]~~~ Persistent Storage ~~~", style=ORANGE_STYLE)
         print("Would you like to use Persistent Storage? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
 
         input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
@@ -565,3 +572,108 @@ while True:
                 saved_hidden_services = load_persistent_storage_file(SAVED_HIDDEN_SERVICES_PATH, persistent_storage_encryptor)
             except:
                 pass
+            
+    current_hidden_service = None
+    console_content = None
+    if not len(saved_hidden_services) == 0:
+        all_options = list(saved_hidden_services.keys()) + ["Use other hidden service"]
+        selected_option = 0
+
+        while True:
+            clear_console()
+            CONSOLE.print("[bold]~~~ Hidden Service selection ~~~", style=ORANGE_STYLE)
+            console_content = ""
+
+            for i, option in enumerate(all_options):
+                if i == selected_option:
+                    console_content += f"[>] {option}\n"
+                    print(f"[>] {option}")
+                else:
+                    console_content += f"[ ] {option}\n"
+                    print(f"[ ] {option}")
+
+            key = input("\nSelect Hidden Service (c to confirm): ")
+
+            if not key.lower() in ["c", "confirm"]:
+                if len(all_options) < selected_option + 2:
+                    selected_option = 0
+                else:
+                    selected_option += 1
+            else:
+                if not selected_option + 1 == len(all_options):
+                   current_hidden_service = all_options[selected_option]
+                break
+    
+    if current_hidden_service is None:
+        clear_console()
+        CONSOLE.print("[bold]~~~ Hidden Service selection ~~~", style=ORANGE_STYLE)
+        if not console_content is None:
+            print(console_content)
+            print("\nSelect Hidden Service (c to confirm): c\n")
+
+        bridges = Bridge.choose_bridges(use_default_bridges, bridge_type)
+        control_port, socks_port = Tor.get_ports(7000)
+
+        with CONSOLE.status("[green]Starting Tor Executable..."):
+            tor_process, control_password = Tor.launch_tor_with_config(control_port, socks_port, bridges)
+
+        if tor_process is None:
+            CONSOLE.print("[red][Critical Error] Tor apparently could not be started properly")
+        else:
+            atexit.register(atexit_terminate_tor, control_port = control_port, control_password = control_password, tor_process = tor_process)
+            while True:
+                clear_console()
+                CONSOLE.print("[bold]~~~ Hidden Service selection ~~~", style=ORANGE_STYLE)
+                if not console_content is None:
+                    print(console_content)
+                    print("\nSelect Hidden Service (c to confirm): c\n")
+                service_address = input("Enter the Hostname of the CipherChat chat server: ")
+                service_address = service_address.strip()
+
+                match = re.search(r"[a-z2-7]{56}\.onion", service_address)
+
+                if not match:
+                    CONSOLE.print("[red][Error] You have not given a valid Onion address")
+                    input("Enter: ")
+                else:
+                    service_address = match.group(0)
+                    with CONSOLE.status("[green]Getting Tor Session..."):
+                        session = Tor.get_requests_session(control_port, control_password, socks_port)
+
+                    start_time = time.time()
+                    with CONSOLE.status("[green]Requesting Service Address..."):
+                        response = session.get("http://" + service_address + "/ping")
+                    end_time = time.time()
+
+                    CONSOLE.print("[green]Request took", end_time-start_time, "s")
+                    try:
+                        response.raise_for_status()
+                        response_content = response.content.decode("utf-8")
+                    except Exception as e:
+                        CONSOLE.print(f"[red][Error] Error while requesting the chat server: '{e}'")
+                        input("Enter: ")
+                    else:
+                        shorten_response_content = shorten_text(response_content, 50)
+
+                        if not "Pong! CipherChat Chat Service " in response_content:
+                            CONSOLE.print(f"[red][Error] This service does not appear to be a CipherChat server. Server Response: '{shorten_response_content}'")
+                            input("Enter: ")
+                        else:
+                            try:
+                                service_version = float(response_content.replace("Pong! CipherChat Chat Service ", ""))
+                            except Exception as e:
+                                CONSOLE.print(f"[red][Error] This service does not appear to be a CipherChat server. Server Response: '{shorten_response_content}'")
+                                input("Enter: ")
+                            else:
+                                if service_version != VERSION:
+                                    CONSOLE.print("[red][Error] This service does not have the same version as you" +
+                                        f"\nService Version: {service_version}\nYour Version: {VERSION}")
+                                    input("Enter: ")
+                                else:
+                                    current_hidden_service = service_address
+                                    break
+
+            with CONSOLE.status("[green]Terminating Tor..."):
+                Tor.send_shutdown_signal(control_port, control_password)
+                time.sleep(1)
+                tor_process.terminate()
