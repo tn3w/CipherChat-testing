@@ -598,7 +598,7 @@ while True:
         CONSOLE.print("[bold]~~~ Hidden Service selection ~~~", style=ORANGE_STYLE)
         if not console_content is None:
             print(console_content)
-            print("\nSelect Hidden Service (c to confirm): c\n")
+            print("Select Hidden Service (c to confirm): c\n")
 
         bridges = Bridge.choose_bridges(use_default_bridges, bridge_type)
         control_port, socks_port = Tor.get_ports(7000)
@@ -615,54 +615,85 @@ while True:
                 CONSOLE.print("[bold]~~~ Hidden Service selection ~~~", style=ORANGE_STYLE)
                 if not console_content is None:
                     print(console_content)
-                    print("\nSelect Hidden Service (c to confirm): c\n")
+                    print("Select Hidden Service (c to confirm): c\n")
                 service_address = input("Enter the Hostname of the CipherChat chat server: ")
                 service_address = service_address.strip()
 
-                match = re.search(r"[a-z2-7]{56}\.onion", service_address)
-
-                if not match:
-                    CONSOLE.print("[red][Error] You have not given a valid Onion address")
+                if service_address == "":
+                    CONSOLE.print("\n[red][Error] You have not entered a hidden service address.")
                     input("Enter: ")
                 else:
-                    service_address = match.group(0)
-                    with CONSOLE.status("[green]Getting Tor Session..."):
-                        session = Tor.get_requests_session(control_port, control_password, socks_port)
+                    if service_address == "b":
+                        break
+                    match = re.search(r"[a-z2-7]{56}\.onion", service_address)
 
-                    start_time = time.time()
-                    with CONSOLE.status("[green]Requesting Service Address..."):
-                        response = session.get("http://" + service_address + "/ping")
-                    end_time = time.time()
-
-                    CONSOLE.print("[green]Request took", end_time-start_time, "s")
-                    try:
-                        response.raise_for_status()
-                        response_content = response.content.decode("utf-8")
-                    except Exception as e:
-                        CONSOLE.print(f"[red][Error] Error while requesting the chat server: '{e}'")
+                    if not match:
+                        CONSOLE.print("\n[red][Error] You have not given a valid hidden service address")
                         input("Enter: ")
                     else:
-                        shorten_response_content = shorten_text(response_content, 50)
+                        service_address = match.group(0)
+                        with CONSOLE.status("[green]Getting Tor Session..."):
+                            session = Tor.get_requests_session(control_port, control_password, socks_port)
 
-                        if not "Pong! CipherChat Chat Service " in response_content:
-                            CONSOLE.print(f"[red][Error] This service does not appear to be a CipherChat server. Server Response: '{shorten_response_content}'")
+                        end_time = None
+
+                        try:
+                            start_time = time.time()
+                            with CONSOLE.status("[green]Requesting Service Address..."):
+                                response = session.get("http://" + service_address + "/ping")
+                            end_time = time.time()
+                            CONSOLE.print("[green]Request took", end_time-start_time, "s")
+                            response.raise_for_status()
+                            response_content = response.content.decode("utf-8")
+                        except Exception as e:
+                            if end_time is None:
+                                end_time = time.time()
+                                CONSOLE.print("[green]Request took", end_time-start_time, "s")
+
+                            CONSOLE.print(f"\n[red][Error] Error while requesting the chat server: '{e}'")
                             input("Enter: ")
                         else:
-                            try:
-                                service_version = float(response_content.replace("Pong! CipherChat Chat Service ", ""))
-                            except Exception as e:
-                                CONSOLE.print(f"[red][Error] This service does not appear to be a CipherChat server. Server Response: '{shorten_response_content}'")
+                            shorten_response_content = shorten_text(response_content, 50)
+
+                            if not "Pong! CipherChat Chat Service " in response_content:
+                                CONSOLE.print(f"\n[red][Error] This service does not appear to be a CipherChat server. Server Response: '{shorten_response_content}'")
                                 input("Enter: ")
                             else:
-                                if service_version != VERSION:
-                                    CONSOLE.print("[red][Error] This service does not have the same version as you" +
-                                        f"\nService Version: {service_version}\nYour Version: {VERSION}")
+                                try:
+                                    service_version = float(response_content.replace("Pong! CipherChat Chat Service ", ""))
+                                except Exception as e:
+                                    CONSOLE.print(f"\n[red][Error] This service does not appear to be a CipherChat server. Server Response: '{shorten_response_content}'")
                                     input("Enter: ")
                                 else:
-                                    current_hidden_service = service_address
-                                    break
+                                    if service_version != VERSION:
+                                        CONSOLE.print("\n[red][Error] This service does not have the same version as you" +
+                                            f"\nService Version: {service_version}\nYour Version: {VERSION}")
+                                        input("Enter: ")
+                                    else:
+                                        current_hidden_service = service_address
+                                        break
 
             with CONSOLE.status("[green]Terminating Tor..."):
                 Tor.send_shutdown_signal(control_port, control_password)
                 time.sleep(1)
                 tor_process.terminate()
+    
+    if current_hidden_service is None:
+        continue
+    
+    if use_persistant_storage:
+        if os.path.isfile(SAVED_HIDDEN_SERVICES_PATH):
+            try:
+                saved_hidden_services = load_persistent_storage_file(SAVED_HIDDEN_SERVICES_PATH, persistent_storage_encryptor)
+            except:
+                pass
+        else:
+            saved_hidden_services = {}
+        
+        if saved_hidden_services.get(current_hidden_service) is None:
+            saved_hidden_services[current_hidden_service] = {}
+        
+        try:
+            dump_persistent_storage_data(SAVED_HIDDEN_SERVICES_PATH, saved_hidden_services, persistent_storage_encryptor)
+        except:
+            pass

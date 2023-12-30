@@ -24,6 +24,9 @@ import hashlib
 from base64 import urlsafe_b64encode, urlsafe_b64decode, b64encode, b64decode
 import requests
 from bs4 import BeautifulSoup
+from rich.style import Style
+from rich.theme import Theme
+from rich.text import Text
 from rich.progress import Progress
 from rich.console import Console
 import distro
@@ -70,6 +73,19 @@ LOGO_BIG = '''
        @@@@@@@@@@@@@@@@@      
 '''
 
+styled_logo = ""
+for char in LOGO_BIG:
+    if char == '@':
+        styled_logo += f'[purple]{char}[/purple]'
+    else:
+        styled_logo += f'[not bold white]{char}[/not bold white]'
+
+custom_theme = Theme({
+    "purple": "rgb(125,70,152)",
+    "white": "rgb(211,215,207)"
+})
+CONSOLE = Console(theme=custom_theme)
+
 def get_console_columns():
     "Returns the console columns"
 
@@ -88,7 +104,7 @@ def clear_console():
     console_columns = get_console_columns()
 
     if console_columns > 104:
-        print(LOGO_BIG)
+        CONSOLE.print(styled_logo)
     elif console_columns > 71:
         print(LOGO_SMALL)
     else:
@@ -1032,7 +1048,8 @@ class Tor:
                 if warn_time + 10 < int(time.time()):
                     break
         
-        os.remove(temp_config_path)
+        if os.path.isfile(temp_config_path):
+            os.remove(temp_config_path)
         
         try:
             with Controller.from_port(port=control_port) as controller:
