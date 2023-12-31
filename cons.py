@@ -7,7 +7,7 @@ GitHub: https://github.com/tn3w/CipherChat
 
 import os
 
-VERSION = 1.21
+VERSION = 1.22
 
 CURRENT_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR_PATH = os.path.join(CURRENT_DIR_PATH, "data")

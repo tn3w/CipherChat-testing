@@ -255,7 +255,7 @@ if os.path.isfile(BRIDGE_CONFIG_PATH):
     try:
         with open(BRIDGE_CONFIG_PATH, 'r', encoding='utf-8') as readable_file:
             file_config = readable_file.read()
-        bridge_type, use_default_bridges, use_bridge_db = file_config.split("--")[:3]
+        bridge_type, use_default_bridges, use_bridge_db = file_config.split("--")
         use_default_bridges = {"true": True, "false": False}.get(use_default_bridges, True)
         use_bridge_db = {"true": True, "false": False}.get(use_bridge_db, False)
 
@@ -404,9 +404,14 @@ if not use_default_bridges:
                         with CONSOLE.status("[green]Requesting Captcha from BridgeDB.."):
                             captcha_image_bytes, captcha_challenge_value = BridgeDB.get_captcha_challenge(bridge_type, session)
                         
+                        captcha_input = None
+                        
                         while True:
                             print("-" * 20)
-                            show_image_in_console(captcha_image_bytes)
+                            try:
+                                show_image_in_console(captcha_image_bytes)
+                            except:
+                                break
                             captcha_input = input("Enter the characters from the captcha: ")
 
                             if captcha_input == "":
@@ -417,6 +422,9 @@ if not use_default_bridges:
                                 input("Enter: ")
                             else:
                                 break
+                        
+                        if captcha_input == None:
+                            continue
 
                         for specific_bridge_type in ["vanilla", "obfs4", "webtunnel"]:
                             bridge_path = os.path.join(DATA_DIR_PATH, specific_bridge_type + ".json")
@@ -451,7 +459,7 @@ if not use_default_bridges:
 
 PERSISTENT_STORAGE_CONF_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.conf")
 PERSISTENT_STORAGE_KEYFILE_PATH = os.path.join(DATA_DIR_PATH, "persistent-storage.key")
-use_persistant_storage = None
+use_persistant_storage, store_user_data = None, None
 persistent_storage_password = None
 persistent_storage_key = None
 
@@ -460,8 +468,12 @@ if os.path.isfile(PERSISTENT_STORAGE_CONF_PATH):
         with open(PERSISTENT_STORAGE_CONF_PATH, "r", encoding = "utf-8") as readable_file:
             persistent_storage_configuration = readable_file.read()
 
-        conf_use_persistent_storage, encrypted_persistent_storage_key = persistent_storage_configuration.split("--")
+        conf_use_persistent_storage, conf_store_user_data, encrypted_persistent_storage_key = persistent_storage_configuration.split("--")
         use_persistant_storage = {"true": True, "false": False}.get(conf_use_persistent_storage)
+        store_user_data = {"true": True, "false": False}.get(conf_store_user_data)
+
+        if not use_persistant_storage:
+            store_user_data = False
 
         while persistent_storage_password is None:
             clear_console()
@@ -493,11 +505,16 @@ if use_persistant_storage is None:
     input_use_persistant_storage = input("Would you like to use Persistent Storage? [y - yes or n - no] ")
     use_persistant_storage = input_use_persistant_storage.lower().startswith("y")
 
+    if use_persistant_storage:
+        input_store_user_data = input("Do you want us to save usernames and passwords? [y - yes or n - no] ")
+        store_user_data = input_store_user_data.lower().startswith("y")
+
 if use_persistant_storage:
     while persistent_storage_password is None:
         clear_console()
         CONSOLE.print("[bold]~~~ Persistent Storage ~~~", style=ORANGE_STYLE)
         print("Would you like to use Persistent Storage? [y - yes or n - no]", {True: "yes", False: "no"}.get(use_persistant_storage))
+        print("Do you want us to save usernames and passwords? [y - yes or n - no]", {True: "yes", False: "no"}.get(store_user_data))
 
         input_persistent_storage_password = getpass("\nPlease enter a strong password: ")
 
@@ -543,7 +560,7 @@ if use_persistant_storage:
     persistent_storage_encryptor = SymmetricEncryption(persistent_storage_password + persistent_storage_key)
 
 with open(PERSISTENT_STORAGE_CONF_PATH, "w", encoding = "utf-8") as writeable_file:
-    persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage)]
+    persistent_storage_configuration = [{True: "true", False: "false"}.get(use_persistant_storage), {True: "true", False: "false"}.get(store_user_data)]
     if not persistent_storage_password is None:
         encrypted_persistent_storage_key = SymmetricEncryption(persistent_storage_password).encrypt(persistent_storage_key)
         persistent_storage_configuration.append(encrypted_persistent_storage_key)
